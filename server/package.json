@@ -1,0 +1,30 @@
+{
+  "name": "routex-backend",
+  "version": "1.0.0",
+  "description": "RouteX - Scalable Real-Time Urban Mobility & Ride-Hailing Platform",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed:drivers": "node scripts/seedDrivers.js",
+    "benchmark": "node scripts/benchmark.js"
+  },
+
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-validator": "^7.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
+    "mongoose": "^8.5.1",
+    "redis": "^4.7.1",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "socket.io-client": "^4.8.3"
+  }
+}

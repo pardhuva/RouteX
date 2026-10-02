@@ -1,0 +1,371 @@
+# Progress
+
+## Day 1 — Foundation (COMPLETE)
+
+### Implemented
+- Express app (`src/app.js`) + entrypoint (`src/server.js`) with MongoDB connection via Mongoose.
+- `.env` / `.env.example` with `PORT`, `MONGO_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`.
+- Models: `User` (bcrypt-hashed password, unique email/phone, role enum, password excluded from JSON), `Driver` (status enum, GeoJSON `currentLocation` with 2dsphere index), `Vehicle` (unique registration number), `Ride` (GeoJSON pickup/destination, status enum, lifecycle timestamps).
+- Auth: `POST /api/auth/register`, `POST /api/auth/login` — bcrypt hashing, JWT issuance, duplicate email/phone → 409.
+- JWT middleware (`auth.middleware.js`) attaching `req.user`; role middleware (`role.middleware.js`) via `requireRole(...roles)`.
+- Driver endpoints: `POST /api/drivers/profile` (creates Driver + Vehicle), `GET /api/drivers/me`, `PATCH /api/drivers/status`.
+- Ride endpoints: `POST /api/rides` (rider-only, driver=null, status=requested), `GET /api/rides/:id` (ownership enforced from `req.user`, not client input).
+- Ride state machine (`ride.service.js` `VALID_TRANSITIONS` + `assertValidTransition`) defined now, not wired to endpoints yet (no transition endpoints exist on Day 1 — reserved for Day 2's accept/start/complete/cancel).
+- Centralized error handling: `ApiError`, `notFoundHandler`, `errorHandler` (maps Mongoose `ValidationError`, `CastError`, duplicate-key `11000` to consistent `{ success, message, errors? }` responses).
+- Request validation via `express-validator` on all mutating routes.
+- `GET /api/health`.
+- `README.md` with setup, API list, Postman flow, architecture decisions.
+
+### Files Changed
+All new: `package.json`, `.env`, `.env.example`, `.gitignore`, `README.md`, `src/app.js`, `src/server.js`, `src/config/db.js`, `src/models/{User,Driver,Vehicle,Ride}.js`, `src/controllers/{auth,driver,ride}.controller.js`, `src/routes/{auth,driver,ride}.routes.js`, `src/services/{auth,driver,ride}.service.js`, `src/middleware/{auth,role,error}.middleware.js`, `src/utils/{ApiError,generateToken}.js`.
+
+### Testing
+- `npm install` completed successfully (192 packages).
+- `node -e "require('./src/app')"` — app loads and registers routes without error.
+- Full request/response flow (register → login → create ride → get ride, driver profile → status) verified against a local MongoDB instance (see test run below for exact results).
+
+### Remaining (deliberately out of scope for Day 1)
+Redis, Kafka, WebSockets/Socket.IO, Razorpay, automatic driver matching, notifications, fare calculation, cancellation/accept endpoints, tests, Docker packaging.
+
+### Next Step
+Day 2: add `POST /api/rides/:id/accept` (driver), `POST /api/rides/:id/start`, `POST /api/rides/:id/complete`, `POST /api/rides/:id/cancel`, wired through the existing `assertValidTransition`.
+
+## Day 2 — Ride Lifecycle (COMPLETE)
+
+### Implemented
+- `ride.service.js`: `acceptRide`, `startRide`, `completeRide`, `cancelRide`, plus a shared `populateRide` helper (refactored out of `getRideById`, no behavior change).
+- Reused Day 1's `VALID_TRANSITIONS`/`assertValidTransition` as-is — it already matched the Day 2 spec exactly, so the transition table itself needed no changes.
+- Check order standardized across all four lifecycle functions: ride-exists (404) → authorization / driver-profile-lookup (403/404) → state-transition validity (400) → business constraint like driver-busy (409). This makes each error message the most specific one available (e.g. a driver who was never assigned to a ride gets 403 before ever hearing about ride state).
+- Accept, complete, and cancel-of-an-accepted-ride each run inside a Mongoose transaction (`mongoose.startSession()` + `session.withTransaction`) so `Ride` and `Driver` flip together. Safe because `MONGO_URI` is now a MongoDB Atlas connection (always a replica set); start-ride is a single-document update so it just uses a plain `save()`.
+- `PATCH /api/rides/:id/accept|start|complete|cancel` added to `ride.routes.js`, gated by the existing `authenticate` + `requireRole` middleware (no new middleware needed).
+- `ride.controller.js` got four thin handlers mirroring the existing `createRide`/`getRide` style.
+- `Ride` model: added `cancelledBy` (`"rider" | "driver" | null`) — the only schema change; `cancelledAt` already existed from Day 1 and is reused.
+- Business rule (documented, not an oversight): a driver can only cancel a ride they've already accepted. `ride.driver` is `null` before acceptance, so a driver has no way to be "the assigned driver" of a still-`requested` ride — that case resolves to 403.
+
+### Files Changed
+- `src/services/ride.service.js` — added the four lifecycle functions + `populateRide` helper.
+- `src/controllers/ride.controller.js` — added `acceptRide`, `startRide`, `completeRide`, `cancelRide` handlers.
+- `src/routes/ride.routes.js` — added the four `PATCH` routes.
+- `src/models/Ride.js` — added `cancelledBy` field.
+- `README.md` — added Day 2 endpoint table rows, a full "Day 2 — Ride Lifecycle" section (sync table, authorization rules, check-ordering rationale, example requests), updated Postman flow and architectural-decisions sections.
+- Nothing in Day 1's auth, driver, or health code paths was touched.
+
+### Testing
+Wrote a temporary end-to-end script (`__day2_test.js`, deleted after the run — not part of the repo) that boots the real Express app against the live Atlas database in `.env`, and drives it purely over HTTP via `fetch` (register → login → driver profile → ride create → accept/start/complete/cancel), asserting status codes and response bodies. Also unit-checked all 11 explicitly-listed invalid transitions via `assertValidTransition` directly. All checks passed (`=== DAY 2: ALL CHECKS PASSED ===`), including:
+- Accept: success, double-accept (400), busy-driver-accept (409), rider-accept (403), unauthenticated (401).
+- Start: success, wrong-driver (403), rider (403), starting a requested ride (403), double-start (400).
+- Complete: success, wrong-driver (403), rider (403), completing an accepted-but-not-started ride (400), double-complete (400).
+- Cancel: rider cancels requested (200), rider cancels accepted + driver freed (200 + verified via `GET /drivers/me`), driver cancels own accepted ride + freed (200), unrelated rider (403), unassigned driver on a requested ride (403), cancel-after-start (400), cancel-after-complete (400).
+- Driver status: available→busy on accept, busy→available on complete and on cancel-of-accepted, confirmed via `GET /api/drivers/me` after each transition.
+Test data (4 users, 2 drivers, 2 vehicles, 6 rides) was deleted from Atlas after the run via a second temporary cleanup script (also deleted).
+
+### Remaining (deliberately out of scope for Day 2)
+Redis, Kafka, WebSockets/Socket.IO, Razorpay, automatic driver matching, notifications, fare calculation, automated test files committed to the repo (testing was done via a throwaway script per the instruction to "create a reasonable test suite or provide a clear Postman testing flow" — a Postman flow is documented in the README since no test framework existed in the Day 1 stack).
+
+### Next Step (superseded — see Day 3 below)
+The original plan was Redis-backed driver GEO lookups; Day 3 instead did this with MongoDB geospatial queries directly, since a `2dsphere` index already existed and Redis wasn't yet justified for a single-instance learning project. Redis remains a good Day 4+ candidate once matching needs to reserve a driver with a TTL across concurrent requests.
+
+## Day 3 — Driver Matching & Geospatial Queries (COMPLETE)
+
+### Implemented
+- `src/config/constants.js` — `DRIVER_SEARCH_RADIUS_METERS`, read from `.env` (default `5000`), so the radius isn't hardcoded in the matching logic.
+- `src/services/matching.service.js` — `findNearestAvailableDriver(coordinates)`, a single `Driver.findOne` using `$near`/`$geometry`/`$maxDistance` against `Driver.currentLocation` (already `2dsphere`-indexed since Day 1). `$near` returns nearest-first, so the first `status: "available"` hit within the radius is already the closest — no extra sort needed.
+- `ride.service.js` `createRide` now calls the matching service right after creating the ride and stores the result on a new `Ride.matchedDriver` field (nullable). The ride is always created regardless of whether a driver was found — matching failure/empty-result never blocks ride creation.
+- **`matchedDriver` is advisory only** — it is not enforced as the sole driver allowed to accept. Considered gating `acceptRide` on it, but that would strand a ride forever if the matched driver goes busy/offline before responding (no other driver could ever accept it under Day 3's synchronous accept model). Enforcing that safely needs a reservation-with-timeout/fallback-to-next-driver mechanism, which is exactly the kind of thing Redis TTL keys are good for — deliberately deferred to Day 4+.
+- `PATCH /api/drivers/location` — new driver-only endpoint to update `Driver.currentLocation`, validated the same way pickup/destination already are (array of 2, lon ∈ [-180,180], lat ∈ [-90,90]).
+- `GET /api/rides/my-rides` — authenticated riders see rides where they're the rider, drivers see rides where they're the assigned driver; supports `?page=&limit=` (limit capped at 50).
+- **`acceptRide` concurrency hardening**: replaced the Day 2 pattern (`Ride.findById` → mutate → `ride.save()`) with `Ride.findOneAndUpdate({ _id, status: "requested" }, { $set: {...} }, { session, new: true })` inside the existing transaction, and the same conditional-update pattern for the driver's `available → busy` flip. See "Concurrency" below for why this matters.
+
+### Why the read-then-write pattern was unsafe
+Two drivers hitting `/accept` for the same ride at nearly the same time could both execute `Ride.findById` and see `status: "requested"` *before either one writes*. Under the old code, both would then proceed to set `status = "accepted"` and `.save()`; whichever write lands second silently overwrites the first driver's acceptance — the ride ends up "accepted" by driver B, but driver A's client already got a 200 believing they had it. `findOneAndUpdate` closes this gap because the `status: "requested"` check and the write happen as one atomic operation at the database level — the second call's filter no longer matches (status is already `"accepted"`), so it gets `null` back and the code returns a clean `409` instead of corrupting state. This is a proper first-level fix, not a full solution: it works because each ride/driver document is a single point of atomicity in MongoDB. It does **not** help across multiple documents or multiple app instances contending on a broader resource (e.g., reserving a driver against many simultaneous ride requests before any of them touch the `Ride` collection) — that class of problem is where a distributed lock (Redis `SET NX PX` or similar) becomes relevant, planned for Day 4+.
+
+### Why `2dsphere` (not `2d`)
+`2d` indexes assume flat Euclidean coordinates; `2dsphere` treats coordinates as points on a sphere (real longitude/latitude) and is required for GeoJSON `Point` queries like `$near`/`$geometry` to return geodesically-correct distances. Both `Driver.currentLocation` and `Ride.pickup.location`/`destination.location` already had `2dsphere` indexes from Day 1, so no index changes were needed for Day 3 — only the query logic was new.
+
+### Files Changed
+- New: `src/config/constants.js`, `src/services/matching.service.js`.
+- Modified: `src/models/Ride.js` (added `matchedDriver`), `src/services/ride.service.js` (matching in `createRide`, atomic `acceptRide`, new `getMyRides`, `populateRide` now also populates `matchedDriver`), `src/services/driver.service.js` (added `updateLocation`), `src/controllers/ride.controller.js` (added `getMyRides`), `src/controllers/driver.controller.js` (added `updateLocation`), `src/routes/ride.routes.js` (added `GET /my-rides`, placed before `GET /:id`), `src/routes/driver.routes.js` (added `PATCH /location`), `.env`/`.env.example` (added `DRIVER_SEARCH_RADIUS_METERS`).
+- Nothing in Day 1/2's auth, accept/start/complete/cancel authorization rules, or state machine was removed or renamed.
+
+### Testing
+Two temporary end-to-end scripts driven over real HTTP against the app running on `localhost:5050` with the live Atlas database (deleted after the run, not part of the repo):
+1. **Day 3 script** (20/20 passed): driver profile creation; ride created with no available driver → `matchedDriver: null`; ride created with one near driver (30m away) and one far driver (Delhi, outside the 5km radius) → `matchedDriver` correctly resolves to the near driver only; a driver who goes `busy` is excluded from matching for a subsequent ride; two drivers concurrently calling `/accept` on the same ride via `Promise.all` → exactly one gets `200`, the other gets a `409`/`400`, and the ride ends up `accepted` exactly once with a valid single driver; `GET /rides/my-rides` pagination (`limit`, `totalCount`, page size) for both a rider and a driver; invalid longitude on `PATCH /drivers/location` → `400`.
+2. **Day 2 regression script** (12/12 passed): full requested→accepted→started→completed lifecycle, double-accept → `400`, rider-attempts-start → `403`, cancel-after-complete → `400`, driver flips back to `available` after completion, rider cancels a requested ride, unrelated rider blocked from `GET /rides/:id` → `403`, unauthenticated create → `401`, invalid coordinates → `400` — confirming no Day 1/2 behavior regressed.
+All test users/drivers/vehicles/rides were deleted from Atlas after both runs via a throwaway cleanup script.
+
+### Remaining (deliberately out of scope for Day 3)
+Redis-based driver reservation/TTL locking, Kafka events, WebSockets/real-time ride-request push to drivers, payments, fallback-to-next-driver on decline/timeout, fare calculation, automated test files committed to the repo (same rationale as Day 2 — no test framework in the stack yet).
+
+### Next Step (superseded — see Day 4 below)
+Redis landed in Day 4 as a caching/fast-state layer, not yet the reservation-with-TTL mechanism described here — matching is still advisory. That reservation step is now the natural Day 5+ follow-up once real-time push (WebSockets) exists to actually notify a held driver.
+
+## Day 4 — Redis Caching & Fast-Changing Driver State (COMPLETE)
+
+### Implemented
+- `src/config/redis.js` — Redis client (`redis` npm package v4) reading `REDIS_URL` from `.env`. Connection errors are logged, never thrown past `connectRedis()` — Redis is treated as an optional optimization layer, unlike MongoDB which is required for startup. A bounded `reconnectStrategy` (backoff up to 5s, gives up after 10 attempts) means a dead Redis doesn't spam reconnect attempts forever; once given up, `client.isReady` stays `false` and every caller's fallback path takes over.
+- `src/services/redis.service.js` — thin wrapper exposing `get/set/del` (cache-aside primitives, `set` accepts an optional TTL) and `geoAdd/geoRemove/geoSearchNearest` (Redis GEO, built on a sorted set). Every function checks `client.isReady` and wraps the actual call in try/catch, returning a safe empty value (`null`/`false`) and logging a warning on failure — callers never need their own try/catch around Redis.
+- `src/config/constants.js` — added `REDIS_DRIVER_TTL_SECONDS` (default `30`, short and configurable — see "Why a short TTL" below) and `REDIS_KEYS` (centralizes the `driver:status:{userId}` and `drivers:geo` key naming so no service hardcodes a string key).
+- **Driver status cache-aside** (`driver.service.js#getDriverStatus`): Redis `GET` first; on a miss, `Driver.findOne(...).select("status")` from MongoDB, then `SET ... EX <ttl>` to populate the cache for next time. Only the single `status` field is cached — `getProfileByUserId` (backs `GET /api/drivers/me`) is untouched, since it needs a populated Mongo document (vehicle + user) regardless, so caching it wouldn't save a query.
+- **Cache invalidation / write-through** (`driver.service.js#syncStatusCache`, called from `updateStatus` and from `ride.service.js` after every Mongo-committed driver status flip in `acceptRide`/`completeRide`/`cancelRide`): writes the new status directly into Redis (with the same TTL) the moment MongoDB's write commits, rather than deleting the key and waiting for the next read to reload it. Chose "update" over "invalidate" because the caller already has the exact new value in hand — writing it costs the same one Redis call as a delete, but skips a guaranteed cache-miss for whoever reads next.
+- **Redis GEO for driver location** (`drivers:geo` key, maintained by `driver.service.js`): a driver is added to the geo set (`GEOADD`) when their status becomes `"available"` (in `updateStatus`/`syncStatusCache`, and again in `updateLocation` if already available) and removed (`ZREM`, since GEO is sorted-set-backed) when they go `busy`/`offline`. Geo-set membership *is* the availability filter — no separate per-candidate status check is needed during search.
+- **`matching.service.js#findNearestAvailableDriver`** now tries Redis GEO first (`geoSearchNearest`), and only falls back to the original Day 3 MongoDB `$near` query if Redis returns nothing (down, or the geo set is empty/has no candidate in range). On a Redis hit, it still does one cheap `Driver.findOne` to fetch the full record and defensively re-checks `status: "available"` in case the cache had drifted — MongoDB remains the final authority.
+- **Fast-fail pre-check in `ride.service.js#acceptRide`**: before touching MongoDB at all, it calls the cache-aside `getDriverStatus`; a cached `"busy"` short-circuits straight to `409` with zero MongoDB round trips. This is purely a speed optimization — the existing Day 3 atomic `findOneAndUpdate` still re-checks status against MongoDB itself before committing, so a stale or missing cache entry can never cause an incorrect assignment.
+- `.env`/`.env.example` — added `REDIS_URL` (default `redis://localhost:6379`) and `REDIS_DRIVER_TTL_SECONDS` (default `30`).
+- `server.js` — added `await connectRedis()` after `connectDB()`. Mongo failure still exits the process (`connectDB` is unchanged); Redis failure is swallowed inside `connectRedis()` and logged, so the server starts normally either way.
+
+### Why no new endpoints
+Every integration point above lives inside an **existing** Day 1–3 route: `PATCH /api/drivers/status`, `PATCH /api/drivers/location`, `POST /api/rides` (matching), and `PATCH /api/rides/:id/accept`. No endpoint was added just to "show off" Redis — per the Day 4 brief, Redis had to prove real value inside the app's actual hot paths or not be added at all.
+
+### Why a short TTL, and why TTL alone isn't enough
+Driver status/location changes every time a ride starts, ends, or a location ping arrives — a long TTL would let a cached `"available"` outlive a driver who has since gone `busy`, letting a second rider be matched to someone already on a ride. `REDIS_DRIVER_TTL_SECONDS=30` bounds how stale a *forgotten* invalidation can get. But TTL alone would still leave up to 30 seconds of staleness on every real status change, which is unacceptable for something as consequential as "is this driver double-bookable" — that's why `syncStatusCache` also does an explicit write-through at every status-changing call site, so the common case is corrected immediately and TTL is only the safety net for whatever wasn't explicitly synced (e.g. a Driver document edited directly, outside the app).
+
+### MongoDB vs Redis in this project
+MongoDB stores persistent data that must survive a restart and remain the single source of truth: users, drivers, rides, ride history, vehicle records. Redis stores fast-changing, cheap-to-lose, frequently-read data that exists to avoid repeat MongoDB round trips: cached driver status (`driver:status:*`, TTL-bound) and the live `drivers:geo` set. Redis never becomes the only place data lives — every value it caches has a MongoDB row it was read from and can always be rebuilt from. This is why the project doesn't move authorization or ride-state-machine decisions into Redis: those must survive a Redis restart with zero ambiguity, so they stay exclusively in MongoDB, guarded by the same atomic `findOneAndUpdate` pattern from Day 3.
+
+### Redis failure handling
+Verified directly: with the Redis container stopped, `POST /api/rides` (matching), `PATCH /api/drivers/status`, `PATCH /api/drivers/location`, and `PATCH /api/rides/:id/accept` all still returned correct `200`/`201` responses — matching fell back to the Day 3 MongoDB `$near` query, the accept pre-check fell back to a direct MongoDB read, and `/api/health` was unaffected. `redis.service.js` logs a `console.warn` for every failed Redis call but never throws it up to the controller layer, so a request never fails *because* Redis is down — only because of an actual business-rule violation.
+
+### Files Changed
+- New: `src/config/redis.js`, `src/services/redis.service.js`.
+- Modified: `src/config/constants.js` (added `REDIS_DRIVER_TTL_SECONDS`, `REDIS_KEYS`), `src/services/driver.service.js` (added `getDriverStatus`, `syncStatusCache`; `updateStatus`/`updateLocation` now call into Redis), `src/services/matching.service.js` (tries Redis GEO before the Mongo fallback), `src/services/ride.service.js` (fast-fail cache pre-check in `acceptRide`; cache sync calls added after `acceptRide`/`completeRide`/`cancelRide`'s driver-status writes), `src/server.js` (`connectRedis()` on startup), `.env`/`.env.example` (`REDIS_URL`, `REDIS_DRIVER_TTL_SECONDS`), `package.json` (added `redis` dependency).
+- Nothing in Day 1–3's routes, controllers, auth, or state machine was removed or renamed. No new API endpoints were added.
+
+### Testing
+All against a real local Redis (`docker run redis:7-alpine`, removed after testing) and the same live Atlas MongoDB used in Days 1–3, driven over real HTTP with throwaway scripts (deleted after the run):
+1. **Cache + GEO test (12/12 passed)**: nearest-driver matching resolved via Redis GEO (near driver A found over far driver B in Delhi); driver A excluded from a subsequent match immediately after accepting (removed from the geo set); a busy driver's second accept attempt rejected via the cached-status fast-fail (`409`) with no ride-state ambiguity; driver A re-added to the geo set and re-matched immediately after completing their ride (status flip synced to cache/geo, not left to expire).
+2. **Direct Redis inspection** (`redis-cli`): confirmed `driver:status:*` keys carry a live, counting-down TTL and hold the correct value after a write-through; confirmed `drivers:geo` (`ZRANGE`) contains exactly the currently-available drivers.
+3. **Redis-down test (7/7 passed)**, run with the Redis container stopped: driver profile creation, status update, location update, ride creation (with correct Mongo-fallback matching), and ride acceptance all still succeeded; `/api/health` unaffected.
+4. **Regression**: Day 2 script (12/12) and Day 3 script (20/20, including the concurrent-accept race test) re-run after all Day 4 changes — all still pass, confirming the new Redis fast-fail layer sits safely on top of Day 3's atomic MongoDB guarantees rather than replacing them.
+All test data was deleted from Atlas and Redis was flushed after each run.
+
+### Remaining (deliberately out of scope for Day 4)
+Kafka events, WebSockets/real-time push, driver reservation-with-TTL (matching is still advisory, same as Day 3), payments, fare calculation, Docker/AWS/Kubernetes for the app itself (Redis was run in Docker only as a local dev convenience, not part of the app's deployment story yet).
+
+### Next Step (superseded — see Day 5 below)
+The plan noted here (WebSockets before Kafka) was reordered: Day 5 built Kafka event-driven processing first, per this session's explicit instructions. WebSockets remain the logical Day 6 candidate — see Day 5's own "Next Step" below.
+
+## Day 5 — Kafka Event-Driven Ride Processing (COMPLETE)
+
+**Explicit project constraint for this session: no Docker anywhere.** Kafka was installed and run as a native local process (no Dockerfile, no docker-compose, no containers) — see "Local Kafka setup" below. Redis (Day 4) is unaffected and, as before, is commonly run via Docker locally as a convenience, but that was never a hard requirement of the app itself and nothing here changes that.
+
+### Branch note
+Day 4's Redis work had been committed on the `ridesync1` branch but not yet merged into `main`, which is where this session started. Per explicit instruction, `ridesync1` was merged into `main` (`git merge ridesync1`, clean fast-forward-free merge, no conflicts) before any Day 5 work began, so Day 5 builds on top of the real, already-existing Day 4 implementation rather than re-doing it.
+
+### Implemented
+- `src/config/kafka.js` — a single shared `kafkajs` `Kafka` client, reading `KAFKA_BROKERS` (comma-separated) and `KAFKA_CLIENT_ID` from `.env`. `requestTimeout: 5000` bounds how long any single Kafka operation (connect, send, fetch) can block, and `retry: { retries: 3 }` bounds reconnect attempts — both exist so a dead broker adds seconds, not tens of seconds, to a request. kafkajs' own internal logger is silenced (`logLevel.NOTHING`) in favor of this project's own structured `console.log`/`console.warn`/`console.error` calls at each meaningful operation.
+- `src/services/kafkaProducer.js` — `connectProducer()`, `disconnectProducer()`, and `publishEvent(topic, eventType, data)`. `publishEvent` builds the standard envelope (`eventId` via `crypto.randomUUID()` — no extra dependency needed — `eventType`, ISO `timestamp`, `version: 1`, `data`), never throws, and returns `true`/`false`. Messages are keyed by `rideId` so every event for a given ride lands on the same partition and is therefore delivered to a consumer in produced order (accepted before started before completed).
+- `src/consumers/rideEventConsumer.js` — subscribes to the `ride-events` topic under consumer group `ridesync-ride-consumers` (`fromBeginning: false`), validates each message (valid JSON, has `eventId`/`eventType`/`data`), and logs `Event processing started`/`Event processing completed` (or `Event processing failed` with the reason, on a malformed message — without crashing). Deliberately does **not** re-run `ride.service.js`'s business logic or write to MongoDB — MongoDB was already updated synchronously before the event was even published.
+- `src/config/constants.js` — added `KAFKA_TOPICS.rideEvents` (`"ride-events"`), `KAFKA_CONSUMER_GROUP` (`"ridesync-ride-consumers"`), and `RIDE_EVENT_TYPES` (`ride.requested/accepted/started/completed/cancelled`) — centralized so no topic/event-type string is duplicated across producer, consumer, or `ride.service.js`.
+- `src/services/ride.service.js` — after each lifecycle function's MongoDB write (and, for `acceptRide`/`completeRide`/`cancelRide`, after the Redis cache/geo sync from Day 4) actually commits, it calls `kafkaProducer.publishEvent(...)` with a minimal payload (`{ rideId, riderId, driverId }`, plus `cancelledBy` for cancellations) — never the full Mongoose document.
+- `src/server.js` — startup sequence extended to `connectDB()` → `connectRedis()` → `connectProducer()` → `startRideEventConsumer()` → `app.listen()`. Added the project's first graceful-shutdown handler: `process.on("SIGINT"/"SIGTERM", ...)` closes the HTTP server first (stop accepting new requests), then the consumer, then the producer, then Redis (`redisClient.quit()`), then `mongoose.connection.close()`, then exits — reverse of startup order, so nothing still-running loses a dependency out from under it.
+- `.env`/`.env.example` — added `KAFKA_BROKERS` (default `localhost:9092`) and `KAFKA_CLIENT_ID` (default `ridesync-backend`).
+- `package.json` — added exactly one new dependency: `kafkajs`.
+
+### Command vs Event
+A **command** is an instruction aimed at one recipient, expected to be obeyed or rejected right now — `PATCH /rides/:id/accept` is a command ("accept this ride"), and the server can say no (`409` if the driver is busy, `400` if the ride isn't in a state that allows it). An **event** is a broadcast statement of fact about something that has already, unconditionally happened — `ride.accepted` is an event; nothing can "reject" it, because by the time it's published, MongoDB already holds the committed result. This project only ever publishes events named in the past tense (`ride.requested`, not `ride.request`), and only after the corresponding MongoDB write has succeeded — see "Database first" below.
+
+### Database first, then publish (and why the order can't flip)
+Every publish call in `ride.service.js` happens strictly after its MongoDB write (and any Day 4 Redis sync) has already completed. If the order were reversed — publish first, then attempt the database write — a database failure after a successful publish would leave a `ride.requested` event on the topic describing a ride that was never actually created; any consumer (this one, or a future one) would believe something exists that MongoDB has no record of. Since `publishEvent()` never throws, doing it last also means a Kafka outage can never undo or fail an already-successful ride mutation — the worst case is a missing event, never a phantom one.
+
+### Local Kafka setup (no Docker)
+Kafka needs a JVM. This session found none installed, so:
+1. Installed Eclipse Temurin JDK 17 via `winget install --id EclipseAdoptium.Temurin.17.JDK` (a native Windows install, not a container).
+2. Downloaded Kafka 3.9.1 (`kafka_2.13-3.9.1.tgz`) from `archive.apache.org` and extracted it.
+3. Ran it in **KRaft mode** (`config/kraft/server.properties`) — Kafka's Zookeeper-free mode, standard since Kafka 3.3+ and the only mode Kafka 4.x supports at all — using the Windows `.bat` scripts under `bin\windows\`, so no Zookeeper process or Zookeeper-specific application code was ever needed.
+4. Formatted storage once (`kafka-storage.bat format -t <uuid> -c config\kraft\server.properties`) and started the broker (`kafka-server-start.bat config\kraft\server.properties`) as a plain background Windows process.
+5. Created the topic once: `kafka-topics.bat --create --topic ride-events --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1`.
+
+One real Windows-specific snag worth recording: Kafka's `.bat` scripts build a `CLASSPATH` by globbing every jar under `libs\`, and `cmd.exe` has an ~8191-character command-line limit — running Kafka from a long, deeply-nested path (or a path containing spaces, like this machine's default user-profile-based temp directory) overflowed that limit and Kafka's own class loader failed with `Could not find or load main class`. The fix was mechanical: install Kafka under a short, space-free path (`C:\Users\Public\kafka`) instead. This is purely a path-length/quoting issue in Kafka's Windows tooling, unrelated to Docker, KRaft, or this project's code.
+
+### Files Changed
+- New: `src/config/kafka.js`, `src/services/kafkaProducer.js`, `src/consumers/rideEventConsumer.js`.
+- Modified: `src/config/constants.js` (Kafka topic/group/event-type constants), `src/services/ride.service.js` (a `publishEvent` call after each of `createRide`/`acceptRide`/`startRide`/`completeRide`/`cancelRide`'s MongoDB writes), `src/server.js` (Kafka producer/consumer added to startup; new graceful-shutdown handler), `.env`/`.env.example` (`KAFKA_BROKERS`, `KAFKA_CLIENT_ID`), `package.json`/`package-lock.json` (`kafkajs`).
+- Nothing in Day 1–4's routes, controllers, auth, state machine, Redis caching, or geospatial matching was removed, renamed, or had its behavior changed. No new API endpoints were added — Kafka is purely an internal event-transport layer, invisible to API clients.
+
+### A bug found and fixed during testing
+The first implementation of `publishEvent`'s `catch` block logged the send failure but never marked the producer as disconnected. Verified impact: with Kafka killed mid-run, a **second** `POST /api/rides` still took ~3.8s (a full retry against the dead broker) instead of failing fast, because nothing had recorded that the broker was unreachable. Fixed by setting the connected flag to `false` inside that `catch` block, so only the *first* request after a failure pays the bounded ~4-5s `requestTimeout` cost; every request after that skips straight to "not connected, skipping publish" in a few milliseconds. The documented tradeoff: this app does not attempt to reconnect its Kafka producer in the background after a failure — publishing stays off until the process restarts. A production system would use kafkajs's own connect/disconnect events or a periodic health check to self-heal; that's more retry/reconnection infrastructure than Day 5's "do not build advanced Kafka retry infrastructure yet" scope allows.
+
+### Testing
+All against the real local Kafka broker above, the same local Redis from Day 4, and the same live Atlas MongoDB from Days 1–4 — driven over real HTTP with a throwaway script (deleted after the run), plus direct Kafka CLI inspection:
+1. **Full lifecycle event test (6/6 passed)**: created a ride, accepted/started/completed it, then created and cancelled a second ride. Confirmed via server logs that all five event types (`ride.requested`, `ride.accepted`, `ride.started`, `ride.completed`, `ride.cancelled`) were both published and consumed, in order, with matching `rideId`/`riderId`/`driverId` at each stage.
+2. **Independent Kafka CLI verification**: `kafka-console-consumer.bat --topic ride-events --from-beginning` read all 6 messages directly off the topic (bypassing this app's own consumer entirely) and confirmed the exact envelope shape (`eventId`, `eventType`, `timestamp`, `version: 1`, `data`) for every one.
+3. **Malformed-event handling (consumer)**: published a non-JSON string and a valid-JSON-but-missing-required-fields message directly to the topic. Both were logged as `Event processing failed` with the reason and skipped; the consumer kept running and correctly processed a subsequent legitimate event afterward — proving one bad message doesn't stall or crash the consumer loop.
+4. **Kafka-down failure handling**: killed the Kafka broker process entirely, then confirmed `POST /api/rides`, `PATCH /api/rides/:id/accept`, driver profile creation, status, and location updates all still returned correct success responses — this app never depends on Kafka to serve a request. Measured the fix above directly: first post-failure request ≈4.2s (bounded retry), second ≈0.1s (fast-skip).
+5. **Regression**: Day 2 (12/12), Day 3 (20/20, including the concurrent-accept race), and Day 4 (12/12, Redis cache-aside + GEO) scripts all re-run after the Day 5 changes — all still pass, confirming Kafka was added without disturbing any earlier day's guarantees.
+6. **Graceful shutdown — partially verified.** The handler code follows the standard, widely-used Node.js pattern (`process.on("SIGINT"/"SIGTERM")` → close HTTP server → close consumer/producer/Redis/MongoDB → exit) and was verified by code review. Attempting to trigger it directly in this sandbox (via `taskkill` and via Node's own `process.kill(pid, "SIGTERM")` from a separate script) only force-terminated the process rather than delivering a real signal — confirmed to be a genuine Windows platform limitation (`taskkill` without `/F` refuses outright for a console process with no window to receive `WM_CLOSE`; `process.kill()` to another process is documented as unreliable for anything but forceful termination on Windows) rather than a bug in the handler. This same code runs correctly under `docker stop`, systemd, Kubernetes' `preStop`, or Ctrl+C in an attached interactive terminal — all of which deliver a real signal — none of which this sandboxed background-process testing setup could reproduce.
+All test data was deleted from Atlas and Redis/the Kafka topic were left containing only the messages documented above (Kafka has no easy single-topic "delete these test messages" primitive short of deleting and recreating the topic, which wasn't necessary since the topic's content is disposable dev/test data, not something the app reads back).
+
+### Remaining (deliberately out of scope for Day 5)
+WebSockets/Socket.IO, real-time ride tracking, Razorpay/payments, driver reservation-with-TTL (still advisory, unchanged from Day 3/4), transactional outbox (mentioned above as the real fix for the publish-after-commit consistency gap, not implemented), dead-letter topics, idempotent consumer deduplication (every event already carries a unique `eventId` that such a check would key off, but the check itself isn't implemented), Kafka Streams, multi-consumer scaling (the consumer group is named and ready for it, but only one consumer instance runs), Docker/Kubernetes/AWS for the app itself.
+
+### Next Step (superseded — see Day 6 below)
+The plan above (WebSockets, then payments) proceeded as described — Day 6 built WebSockets/Socket.IO.
+
+## Day 6 — WebSockets & Real-Time Ride Updates (COMPLETE)
+
+**No Docker anywhere, by explicit requirement — extended this session to Redis too.** Day 4's Redis had been running in a Docker container (`ridesync-redis`) purely as a local-dev convenience; that container was stopped and removed, and Redis now runs as a native Windows process instead (portable `redis-server.exe`, no installer, no container) — see "Redis moved off Docker" below. Kafka (Day 5) was already Docker-free and is unaffected.
+
+### Redis moved off Docker
+Attempted the "proper" native-Windows path first — Memurai Developer (a modern, Redis-7-compatible Windows service) via `winget install Memurai.MemuraiDeveloper` — but its installer failed in this sandbox (MSI custom action couldn't create a temp directory, error 1603/access denied, unrelated to this project's code). Fell back to a portable, installer-free Redis-for-Windows build ([tporadowski/redis](https://github.com/tporadowski/redis), Redis 5.0.14.1 — a maintained fork of the old Microsoft Open Tech port): download the zip, extract, run `redis-server.exe redis.windows.conf` directly, same as Kafka's approach in Day 5. No MSI, no service install, no Docker. It listens on the same `localhost:6379` as before, so `REDIS_URL` needed no change.
+**One real consequence, not hidden:** Redis 5.0.14.1 predates the `GEOSEARCH` command (added in Redis 6.2), so Day 4's `redisService.geoSearchNearest` now always fails with "unknown command" against this specific local server. That failure is caught, logged as a warning, and falls straight through to the Day 3 MongoDB `$near` query — exactly the graceful-degradation path Day 4 was designed for, just triggered by a version gap instead of downtime. Confirmed directly: Day 4's regression test still passes 12/12 on this Redis version, because the fallback makes the outcome identical either way. `GEOADD`/`ZREM`/`GET`/`SET ... EX` (everything else Redis-related in this project) are all long-supported and work normally.
+
+### Implemented
+- `src/config/socket.js` — creates the Socket.IO server via `new Server(httpServer, {...})`, attached to the **same** underlying HTTP server `server.js` already creates for Express (one process, one port — not a second backend). Registers the JWT auth middleware (`io.use(...)`) and the per-connection handler that logs connect/disconnect and wires up ride-room handlers. Exposes `getIO()` so other modules (the Kafka consumer) can reach the same instance without a circular import.
+- `src/middleware/socketAuth.middleware.js` — the socket-handshake equivalent of `auth.middleware.js`'s `authenticate()`. Reads the JWT from `socket.handshake.auth.token` (not an `Authorization` header — there's no per-message header on a persistent connection), verifies it with the same `JWT_SECRET`/`User` lookup as REST, and attaches a minimal `socket.user = { id, role }`. Rejects with `next(new Error(...))` on any failure, which Socket.IO turns into a `connect_error` on the client before a connection is ever established — no unauthenticated socket is ever handed a connected state.
+- `src/sockets/rideSocket.js` — registers this project's two real-time events on each authenticated socket:
+  - `join_ride` — loads the ride, checks the caller is the rider or the *currently assigned* driver (same ownership rule as REST's `getRideById`/`cancelRide`), and only then `socket.join('ride:<rideId>')`. Anyone else gets `ride_error`, never a joined room.
+  - `driver_location_update` — validates role (driver only), payload shape/coordinate ranges, ride existence, that the caller is *this* ride's assigned driver, and that the ride is `accepted`/`started` (not `requested`/`completed`/`cancelled`) — then a simple 2-second per-driver in-memory throttle (silently drops, doesn't error) — then writes to Redis (`driverService.updateLiveLocation`, Redis-only, see below) and broadcasts `driver_location_updated` to the ride's room.
+- `src/services/driver.service.js` — added `updateLiveLocation(rideId, { latitude, longitude })`: writes `{ latitude, longitude, updatedAt }` to a new Redis key `ride:<rideId>:driver-location` (TTL `REDIS_RIDE_LOCATION_TTL_SECONDS`, default 120s, refreshed on every update). Deliberately separate from the existing REST `updateLocation` (Day 3/4), which still writes to MongoDB — see "Why driver location bypasses MongoDB" below.
+- `src/consumers/rideEventConsumer.js` — added `broadcastRideStatus(event)`, called right after each Kafka event is logged as processed: derives the ride status from the event type (`"ride.accepted"` → `"accepted"`) and calls `getIO().to('ride:<rideId>').emit("ride_status_updated", {...})`. This is the one place Kafka and Socket.IO actually meet. If `getIO()` returns `null` (Socket.IO not yet initialized), it logs a warning and skips — same degrade-don't-crash pattern as everywhere else in this project.
+- `src/config/constants.js` — added `SOCKET_EVENTS` (`join_ride`, `driver_location_update`, `ride_joined`, `ride_status_updated`, `driver_location_updated`, `ride_error`), `REDIS_RIDE_LOCATION_TTL_SECONDS`, and `REDIS_KEYS.rideDriverLocation` — centralized, same reasoning as every other constants addition in this project.
+- `src/server.js` — now creates `http.createServer(app)` explicitly (instead of letting `app.listen()` create one implicitly) so Socket.IO can attach before the port opens; `initSocket(httpServer)` runs before `connectProducer()`/`startRideEventConsumer()`, since the consumer's broadcast needs `io` to exist. Graceful shutdown now closes Socket.IO first (`io.close()`, which also closes the underlying HTTP server it was attached to) instead of calling `httpServer.close()` directly.
+- `.env`/`.env.example` — added `REDIS_RIDE_LOCATION_TTL_SECONDS` (default `120`).
+- `package.json` — added `socket.io` (runtime) and `socket.io-client` (devDependency, used only by this session's test scripts to drive real socket connections — not required by the app itself).
+
+### Command vs event vs real-time push — three different jobs
+This project now has three distinct ways something can happen, and it's worth being precise about which is which: a **command** (`PATCH /rides/:id/accept`) is a synchronous REST request that can be refused right now. An **event** (`ride.accepted` on Kafka) is an asynchronous, backend-internal record that something already happened — durable-ish, replayable in principle, consumed by any number of backend processes that don't need to be running at the moment it's produced. A **real-time push** (`ride_status_updated` over Socket.IO) is neither: it's an ephemeral, best-effort notification to whichever specific clients happen to be connected *right now* — if nobody's listening, it's simply gone, there's nothing to replay. REST creates state, Kafka carries the fact that state changed to other backend processes, Socket.IO tells a live human about it.
+
+### Why driver location bypasses MongoDB (Socket.IO path only)
+A driver's location can change every couple of seconds while a ride is active. Writing every one of those to MongoDB — a durable, disk-backed, replicated write — for data that's obsolete a few seconds later would mean most of MongoDB's write volume in a busy system is churn nobody will ever query historically. Redis already exists in this project specifically for fast-changing, cheap-to-lose state (Day 4); a ride's live location is exactly that. This is why `updateLiveLocation` writes only to Redis, while the existing REST `PATCH /api/drivers/location` (unchanged) still writes to MongoDB — that endpoint is called occasionally, not on every GPS tick, so the cost/benefit is completely different. `Driver.currentLocation` in MongoDB stays a coarser, periodic snapshot; the ride room's live stream is Redis + Socket.IO only.
+
+### Why the ride's live-location key is separate from Day 4's matching geo set
+Day 4's `drivers:geo` Redis set has one documented invariant: it contains exactly the currently-*available*, matchable drivers — a driver goes `busy` on accept and is explicitly removed from it. A driver's position during an *active ride* has nothing to do with matchability (they're `busy`, correctly excluded from matching), so reusing that same key for "where is this ride's driver right now" would either violate that invariant or require bypassing it with special-case logic. A new, ride-scoped key (`ride:<rideId>:driver-location`) keeps both invariants simple and independently true.
+
+### Basic flood protection
+A 2-second per-driver throttle (in-memory `Map`, see `rideSocket.js`) silently drops `driver_location_update` events arriving faster than that — not an error response, since the driver's client isn't doing anything wrong by sampling GPS frequently; this just decides how much of that stream the server acts on and re-broadcasts. Verified directly: a second update sent immediately after the first does not produce a second `driver_location_updated` broadcast to the rider.
+
+### Real-time ride flow (as implemented)
+```
+Driver taps "Start"
+  → PATCH /rides/:id/start (REST, unchanged from Day 2/3)
+  → MongoDB updated
+  → ride.started published to Kafka (Day 5, unchanged)
+  → rideEventConsumer processes it, calls broadcastRideStatus()
+  → io.to("ride:<rideId>").emit("ride_status_updated", { status: "started", ... })
+  → rider's connected socket (already in that room via join_ride) receives it live
+
+Driver's phone sends a GPS tick
+  → socket.emit("driver_location_update", { rideId, latitude, longitude })
+  → rideSocket.js validates role/ownership/ride-status/throttle
+  → driverService.updateLiveLocation() writes to Redis (not MongoDB)
+  → io.to("ride:<rideId>").emit("driver_location_updated", { location, ... })
+  → rider receives it live, no Kafka involved — this path is REST-free and Kafka-free by design, since it's driven by an inbound socket event, not a MongoDB-backed command
+```
+
+### Testing
+All against the real local stack (native Redis, native Kafka, live Atlas MongoDB), driven with real `socket.io-client` connections over WebSocket transport, via throwaway scripts (deleted after the run):
+1. **Core Socket.IO suite (24/24 passed)**: invalid JWT and missing JWT both rejected at handshake (`connect_error`, connection never established); valid JWT connects for rider/driver; rider can join their own ride's room; an unrelated user cannot; a driver who isn't yet assigned (ride still `requested`) cannot join, but can immediately after accepting; `ride_status_updated` received live for `accepted`/`started`/`completed`/`cancelled`, each traced end-to-end from the REST call through Kafka to the socket event; a rider attempting `driver_location_update` is rejected (role check); the assigned driver's location update reaches the rider live; invalid coordinates rejected; a *different* driver (not assigned to this ride) is rejected; a rapid second location update within the 2s throttle window produces no second broadcast; a location update after the ride is `completed` is rejected.
+2. **Redis verification**: `redis-cli GET ride:<rideId>:driver-location` showed the exact last-sent coordinates with a live, counting-down TTL — confirming the write path, not just the broadcast.
+3. **Malformed/invalid input (3/3 passed)**: a non-ObjectId string as `rideId` on both `join_ride` and `driver_location_update` rejected with `ride_error`; a well-formed but nonexistent ride id rejected with "Ride not found".
+4. **Redis-down (4/4 passed)**: with the native Redis process killed, `driver_location_update` still broadcast `driver_location_updated` to the rider correctly — only the Redis-side "last known position" cache silently no-ops (per `redisService.set`'s existing degrade-safe behavior from Day 4); nothing in the socket path depends on Redis succeeding.
+5. **Kafka-down (5/5 passed)**: with the Kafka broker killed, `accept`/`start`/`complete` REST calls all still returned `200`; no `ride_status_updated` was broadcast for them (expected and correct — the consumer never received an event to broadcast) and nothing crashed.
+6. **Regression**: Day 2 (12/12), Day 3 (20/20), Day 4 (12/12 — including on the now-native, GEOSEARCH-less Redis, confirmed still falling back correctly), and Day 5 (6/6) scripts all re-run after the Day 6 changes — all still pass.
+All test data was deleted from Atlas after each run; Redis was flushed between runs.
+
+### Files Changed
+- New: `src/config/socket.js`, `src/middleware/socketAuth.middleware.js`, `src/sockets/rideSocket.js`.
+- Modified: `src/config/constants.js` (`SOCKET_EVENTS`, `REDIS_RIDE_LOCATION_TTL_SECONDS`, `REDIS_KEYS.rideDriverLocation`), `src/services/driver.service.js` (`updateLiveLocation`), `src/consumers/rideEventConsumer.js` (`broadcastRideStatus`), `src/server.js` (explicit `http.createServer`, Socket.IO init in the startup sequence, shutdown now closes `io` instead of `httpServer` directly), `.env`/`.env.example` (`REDIS_RIDE_LOCATION_TTL_SECONDS`), `package.json`/`package-lock.json` (`socket.io`, `socket.io-client`).
+- Nothing in Day 1–5's REST endpoints, controllers, ride state machine, Redis cache-aside logic, or Kafka producer/consumer's own event-publishing behavior was removed, renamed, or had its business logic duplicated into the socket layer (per the explicit "don't duplicate business logic in Socket.IO" instruction — sockets here only ever read ride state to authorize, and write ephemeral location data; every ride *state transition* still goes exclusively through `ride.service.js`).
+- No Docker files were added (none existed before, either). The Docker-based `ridesync-redis` container from Day 4 was stopped and removed as part of moving Redis off Docker — see above.
+
+### Remaining (deliberately out of scope for Day 6)
+Razorpay/payments, driver reservation-with-TTL (still advisory), transactional outbox, dead-letter topics, idempotent consumer/socket-event deduplication, Redis Socket.IO adapter / multi-server scaling (see "What changes with multiple server instances" below — documented, not built), production-grade rate limiting (the 2s throttle is intentionally simple), reconnection state synchronization beyond "the client re-joins its room," Docker/Kubernetes/AWS.
+
+### Next Step (superseded — see Day 7 below)
+Day 7 focused on simulated payments + idempotency, per this session's explicit scope, rather than logging/test-framework/observability work. Those remain open — see Day 7's own "Next Step" below.
+
+## Day 7 — Simulated Payments, Idempotency & Reliability Polish (COMPLETE)
+
+**No Docker anywhere — unchanged from Days 5/6.** No new infrastructure was needed for Day 7 beyond what already existed (MongoDB, Redis, Kafka); a new `payment-events` Kafka topic was added using the same native local Kafka broker from Day 5.
+
+### Implemented
+- `src/models/Payment.js` — a dedicated model, deliberately not fields bolted onto `Ride` (ride lifecycle and payment lifecycle are separate state machines). Fields: `ride` (unique index — see "1:1 by construction" below), `rider`, `amount`, `currency`, `status` (`pending|success|failed`), `paymentMethod` (`"simulated"`), `idempotencyKey`, `providerReference`, `paidAt`, `failedAt`, `failureReason`.
+- `src/services/fare.service.js` — `calculateDistanceKm` (Haversine, great-circle distance between the ride's own pickup/destination GeoJSON points) and `calculateFare(ride)` (`baseFare + distanceKm*perKm + durationMinutes*perMinute`, rounded to 2 decimals), reading only from the ride's own persisted `startedAt`/`completedAt`/coordinates — never from a request body.
+- `src/services/paymentProviders/simulatedPaymentProvider.js` — the one seam meant to change when a real gateway is integrated (see "Future Razorpay extension" below). Exports `charge({ requestedResult })` returning `{ status, providerReference, failureReason }`.
+- `src/services/payment.service.js` — `createPayment`, `getPaymentById`, `simulatePayment`, plus a `VALID_TRANSITIONS`/`assertValidTransition` pair mirroring `ride.service.js`'s exact pattern. This is where fare calculation, ownership checks, the payment state machine, idempotency, and the concurrency-safe atomic update all live — see "Idempotency + concurrency" below for the mechanics.
+- `src/consumers/paymentEventConsumer.js` — a new, separate Kafka consumer (own topic `payment-events`, own consumer group `ridesync-payment-consumers`), structurally identical to `rideEventConsumer.js`: validates, logs, and bridges to Socket.IO (`payment_status_updated`, broadcast to the ride's existing `ride:<rideId>` room — no new room type needed).
+- `src/controllers/payment.controller.js` + `src/routes/payment.routes.js` — `POST /api/payments/:rideId`, `GET /api/payments/:paymentId`, `POST /api/payments/:paymentId/pay`, mounted at `/api/payments` in `app.js`. Thin controllers, same style as `ride.controller.js` — all business logic lives in the service.
+- `src/server.js` — `startPaymentEventConsumer()`/`stopPaymentEventConsumer()` added alongside the existing ride consumer in the startup/shutdown sequence.
+- `src/config/constants.js` — `KAFKA_TOPICS.paymentEvents`, `PAYMENT_CONSUMER_GROUP`, `PAYMENT_EVENT_TYPES`, `FARE_CONFIG`, `PAYMENT_CURRENCY`, `SOCKET_EVENTS.serverToClient.paymentStatusUpdated`.
+- `.env`/`.env.example` — `FARE_BASE`, `FARE_PER_KM`, `FARE_PER_MINUTE`, `PAYMENT_CURRENCY`. No Razorpay keys — Razorpay is not integrated.
+
+### Reused, not rebuilt
+`Ride.fare` already existed as a field since Day 1 and was always `null` — Day 7 is the first thing that ever populates it (as an informational snapshot; `Payment.amount` is the actual authoritative charge, immutable once the payment exists). No changes were needed to `ride.service.js`, `matching.service.js`, `driver.service.js`, or any Day 1–6 route/controller — payment creation is a rider-triggered REST call (`POST /api/payments/:rideId`) after the ride is already `completed`, not something `completeRide` triggers automatically, keeping the two domains' code fully decoupled.
+
+### 1:1 by construction, not by convention
+`paymentSchema.index({ ride: 1 }, { unique: true })` makes "at most one payment per ride" a database-enforced fact, not an application-level check that could race. This is also what makes concurrent duplicate-`createPayment` requests safe: both attempt `Payment.create(...)`, MongoDB allows exactly one to succeed, and the loser's driver-level `E11000` duplicate-key error is caught and turned into "fetch and return the existing payment" (`201` for the winner, `200` for the loser) — an idempotent-create, not an error, matching the brief's "repeated requests should safely return the existing result."
+**Known limitation, stated deliberately:** because this is a *permanent* 1:1 relationship, a `FAILED` payment cannot be retried by creating a new `Payment` for the same ride — the unique index would reject it, and re-opening a terminal payment back to `pending` is explicitly an invalid transition. A real system would need a considered decision here (allow a new attempt referencing the same ride? version the payment? add an explicit retry endpoint?) — deliberately not designed today, since the brief didn't ask for retry semantics and guessing at one risks over-engineering a small piece of a learning project.
+
+### Idempotency + concurrency (the core Day 7 mechanic)
+`POST /api/payments/:paymentId/pay` requires an `Idempotency-Key` header (rejected with `400` if missing — deliberately required, not optional, given how central this concept is to the day). `payment.service.js#simulatePayment`:
+1. Loads the payment, checks the caller owns it (`403` otherwise).
+2. **Idempotent replay check**: if `payment.idempotencyKey` already equals the incoming key, returns the already-settled payment as-is — no re-processing, no second call to the provider, no second Kafka event. This is what makes "the rider double-clicks PAY" or "the client retries after a lost response" safe.
+3. If the payment isn't `pending`, rejects with `409` (a genuinely different attempt to pay an already-settled payment, not a replay).
+4. Calls `simulatedPaymentProvider.charge(...)` to get the (simulated) outcome.
+5. Applies the result via `Payment.findOneAndUpdate({ _id, status: "pending" }, { $set: {...} })` — the exact same atomic-conditional-update pattern as Day 3's `acceptRide`. Two concurrent `pay` calls can both pass steps 1–4 before either writes; this filter re-checks `status: "pending"` atomically at write time, so only the first one actually applies. The loser reloads the payment: if the *winner* used the same idempotency key (a genuine race between duplicate copies of the same logical request), that's still a valid replay and returns the winner's result; otherwise it's correctly rejected with `409`.
+6. Only after that write commits does it publish `payment.success`/`payment.failed` to Kafka — MongoDB is the source of truth for whether a payment succeeded, never Kafka's publish outcome.
+
+This mirrors the brief's explicit instruction not to rely on Redis for financial idempotency: the idempotency key lives on the `Payment` document in MongoDB, checked and enforced there, not in a Redis-backed dedup cache. Redis's role in this project (Day 4) is completely untouched by Day 7 — driver status/location/geo caching, nothing payment-related.
+
+### Payment lifecycle vs. ride lifecycle — independent state machines
+```text
+Ride:     requested → accepted → started → completed        (terminal)
+Payment:                                    pending → success (terminal)
+                                                     → failed  (terminal)
+```
+A `completed` ride with a `pending` (or even `failed`) payment is valid and expected — nothing about a payment outcome rolls the ride back to another status, and nothing about ride state gates anything except the *initial* payment-creation check (`ride.status === "completed"`). Verified directly: after a simulated payment failure, the ride's own status remains `completed`.
+
+### Testing
+All against the real local stack (native Redis, native Kafka, live Atlas MongoDB, real `socket.io-client` connections), driven with a throwaway script (deleted after the run) plus independent Kafka CLI/kafkajs-admin verification:
+1. **Core suite (34/34 passed)**: fare math verified two ways — the app's returned amount matched an independently-computed Haversine+fare calculation to the cent; payment creation rejected for a non-completed ride (`400`), a non-owning rider (`403`), and an invalid ride id (`400`, via the existing Mongoose `CastError` → 400 mapping, no new validation code needed); successful creation (`201`), `ride.fare` persisted; duplicate creation returns the same payment (`200`, not a new `201`); unauthorized `GET` rejected (`403`); `pay` without an `Idempotency-Key` rejected (`400`); successful simulated payment (`paidAt`, `providerReference` populated) with a live `payment_status_updated` Socket.IO event received by the rider; the *exact same* idempotency key replayed returns the identical `paidAt` (proving no re-processing); a *different* key against an already-settled payment correctly rejected (`409`); unauthorized `pay` rejected; failure branch (`failedAt`/`failureReason` populated, `payment_status_updated` with `status: "failed"` received live, ride status confirmed still `completed`).
+2. **Concurrency (both required scenarios passed)**: two simultaneous `pay` requests (different idempotency keys, one requesting success and one requesting failure) for the same pending payment — exactly one returned `200`, the other `409`, and the payment settled exactly once. Two simultaneous `createPayment` requests for the same ride — both returned the same payment id (one `201`, one `200`), confirmed via the unique index, not an application-level race-prone check.
+3. **Independent Kafka verification**: a separate kafkajs consumer (its own throwaway consumer group, `fromBeginning: true`) read every message off `payment-events` directly, bypassing this app's own consumer entirely — confirmed exactly one `payment.created` and exactly one settlement event (`payment.success` or `payment.failed`, never both, never duplicated) per payment across every scenario including both concurrency races.
+4. **Regression**: Day 2 (12/12), Day 3 (20/20), Day 4 (12/12), Day 5 (6/6), and Day 6 (24/24) scripts all re-run after the Day 7 changes — all still pass, confirming payments were added without disturbing any earlier day's guarantees.
+All test data (including `Payment` documents) was deleted from Atlas after each run; Redis was flushed between runs.
+
+### A real environment hiccup, documented honestly
+Partway through this session the sandbox VM appears to have been suspended and resumed (a date change was reported mid-session), which left the long-running Kafka broker in a degraded state (repeated heartbeat timeouts, slow `__consumer_offsets` recovery) and — separately — revealed roughly 30 orphaned `nodemon`/`npm run dev` processes that had accumulated across every EADDRINUSE crash-loop since Day 3, never cleaned up, which were themselves causing severe system-wide sluggishness. Both were fixed by brute force: killing every stray `node.exe` process and restarting the Kafka broker cleanly. Worth recording as a real lesson: long-lived local dev infrastructure (a broker or a watch process left running across many sessions) can accumulate state and orphaned processes in ways that eventually degrade the whole environment, not just the one thing you're actively working on.
+
+### Files Changed
+- New: `src/models/Payment.js`, `src/services/fare.service.js`, `src/services/payment.service.js`, `src/services/paymentProviders/simulatedPaymentProvider.js`, `src/consumers/paymentEventConsumer.js`, `src/controllers/payment.controller.js`, `src/routes/payment.routes.js`.
+- Modified: `src/app.js` (mounted `/api/payments`), `src/server.js` (payment consumer start/stop), `src/config/constants.js` (payment/fare constants), `.env`/`.env.example` (`FARE_BASE`, `FARE_PER_KM`, `FARE_PER_MINUTE`, `PAYMENT_CURRENCY`).
+- No changes to any Day 1–6 model, service, controller, or route. No new npm dependencies.
+
+### Future Razorpay extension
+Swapping the simulator for a real provider means writing `razorpayPaymentProvider.js` with the same `charge({...}) -> { status, providerReference, failureReason }` shape (likely backed by a webhook handler rather than a synchronous return, which would need a small addition — but the `Payment` model, state machine, controller, routes, Kafka events, and Socket.IO notifications would not change). This is the concrete payoff of programming against the `PaymentProvider` abstraction from day one instead of coupling `payment.service.js` directly to one vendor's SDK.
+
+### Remaining (deliberately out of scope for Day 7)
+Razorpay (by explicit instruction), retrying a failed payment (see "1:1 by construction" above), refunds, wallets, coupons, surge pricing, transactional outbox (the publish-after-commit gap from Day 5 applies identically to payment events — same documented tradeoff, not newly introduced), a real automated test framework (still throwaway scripts), rate limiting, structured logging/observability, Docker/Kubernetes/AWS.
+
+### Next Step (superseded — see Day 8 below)
+Day 8 built the frontend before any of the above — see its own "Next Step" below for what's still open.
+
+## Day 8 — React Frontend (COMPLETE)
+
+A full React + Vite + Tailwind frontend was added at `../client`, integrated directly against this backend's real
+REST API and Socket.IO server — no mock data, no fabricated responses. Full detail (structure, pages, hooks,
+architecture, and the honest list of backend gaps the UI works around rather than hides) lives in
+`../client/README.md`, since this is frontend work rather than a backend change; nothing in `server/src` was
+modified for Day 8.
+
+### Testing
+Verified with real, driven browser sessions (Playwright against a headless Chromium, screenshots inspected, console
+errors checked) rather than a build-only check: landing page (desktop + mobile viewport), registration and login for
+both roles, driver onboarding, and — most importantly — the complete rider-to-payment lifecycle end to end: ride
+booked with real map-derived coordinates, driver accepted, rider saw the acceptance live via the Kafka → Socket.IO
+bridge (Day 5/6), ride started and completed with live status on both sides, and payment succeeded showing the
+real backend-calculated fare. Found and fixed one real bug in the process: the live-update handler was patching only
+the `status` field locally instead of re-fetching the full ride, so a rider's screen never actually learned who their
+driver was after acceptance — fixed by having the shared `useLiveRide` hook re-fetch the complete ride on every
+`ride_status_updated` event instead of hand-patching one field.
+
+Also hit, mid-session, a stale Kafka producer connection on the long-running backend process (consistent with Day
+5/7's documented "producer marks itself disconnected after a send failure and doesn't reconnect automatically" — see
+above) — resolved by restarting the backend process, not a code change.
+
+### Next Step
+A real Razorpay integration behind the existing `PaymentProvider` abstraction; a driver-reservation-with-TTL on top
+of Day 6's real-time layer (which would also finally let the frontend's incoming-request UI go live); a proper
+automated test suite (Jest/Mocha, and Playwright for the frontend) replacing the throwaway scripts used through
+every day of this build; structured logging, rate limiting, and observability for anything resembling production
+readiness.
