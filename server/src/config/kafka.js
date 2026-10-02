@@ -8,7 +8,7 @@ const brokers = (process.env.KAFKA_BROKERS || "localhost:9092").split(",").map((
 // consumers/rideEventConsumer.js: "producer connected", "event published",
 // "event consumed", ...), so kafkajs' own logger is silenced here to avoid
 // duplicate, harder-to-read output.
-const kafka = new Kafka({
+const kafkaConfig = {
   clientId: process.env.KAFKA_CLIENT_ID || "routex-backend",
   brokers,
   logLevel: logLevel.NOTHING,
@@ -16,11 +16,19 @@ const kafka = new Kafka({
     initialRetryTime: 300,
     retries: 3,
   },
-  // Bounds how long any single Kafka operation can block. Without this, a
-  // request that touches Kafka mid-flight (e.g. acceptRide publishing
-  // "ride.accepted") could hang for kafkajs' 30s default while a broker is
-  // unreachable, well past what an HTTP client will wait for a response.
   requestTimeout: 5000,
-});
+};
+
+// Add SASL authentication if username and password are provided (required for Cloud Kafka like Upstash)
+if (process.env.KAFKA_USERNAME && process.env.KAFKA_PASSWORD) {
+  kafkaConfig.ssl = true;
+  kafkaConfig.sasl = {
+    mechanism: "scram-sha-256",
+    username: process.env.KAFKA_USERNAME,
+    password: process.env.KAFKA_PASSWORD,
+  };
+}
+
+const kafka = new Kafka(kafkaConfig);
 
 module.exports = { kafka };
