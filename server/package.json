@@ -10,6 +10,9 @@
     "seed:drivers": "node scripts/seedDrivers.js",
     "benchmark": "node scripts/benchmark.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "bullmq": "^6.3.11",
