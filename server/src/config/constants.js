@@ -164,6 +164,10 @@ const PAYOUT_STATUSES = {
 
 const PAYMENT_CURRENCY = process.env.PAYMENT_CURRENCY || "INR";
 
+// Dynamic Expanding Radius Matching Tiers (3km -> 7km -> 15km)
+const MATCHING_RADIUS_TIERS = [3000, 7000, 15000];
+const TIER_EXPANSION_DELAY_MS = Number(process.env.TIER_EXPANSION_DELAY_MS) || 15000;
+
 // Client->server and server->client socket event names, centralized for the
 // same reason as the Kafka/Redis constants above — one name per concept,
 // agreed on by every file that emits or listens for it.
@@ -177,6 +181,7 @@ const SOCKET_EVENTS = {
     rideStatusUpdated: "ride_status_updated",
     driverLocationUpdated: "driver_location_updated",
     paymentStatusUpdated: "payment_status_updated",
+    matchingRadiusExpanded: "matching_radius_expanded",
     // Pushed to a specific driver's personal room (`driver:<userId>`, see
     // config/socket.js) when they're the nearest-match candidate for a new
     // ride — the piece Day 6 originally left advisory-only/frontend-only.
@@ -189,6 +194,8 @@ const SOCKET_EVENTS = {
 
 module.exports = {
   DRIVER_SEARCH_RADIUS_METERS,
+  MATCHING_RADIUS_TIERS,
+  TIER_EXPANSION_DELAY_MS,
   REDIS_DRIVER_TTL_SECONDS,
   REDIS_RIDE_LOCATION_TTL_SECONDS,
   REDIS_KEYS,

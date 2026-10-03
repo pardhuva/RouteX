@@ -56,6 +56,10 @@ const rideSchema = new mongoose.Schema(
       enum: ["requested", "accepted", "started", "completed", "cancelled"],
       default: "requested",
     },
+    searchRadiusMeters: {
+      type: Number,
+      default: 3000,
+    },
     vehicleType: {
       type: String,
       enum: ["bike", "auto", "car", "sedan", "suv"],

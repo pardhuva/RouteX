@@ -48,7 +48,7 @@ export default function ActiveRidePanel({ ride, onRideChange, onCancelled }) {
     [onRideChange, showToast]
   );
 
-  const { driverLocation } = useLiveRide(ride._id, { onRideUpdate: handleRideUpdate });
+  const { driverLocation, matchingRadius } = useLiveRide(ride._id, { onRideUpdate: handleRideUpdate });
 
   async function handleCancel() {
     setCancelling(true);
@@ -107,21 +107,21 @@ export default function ActiveRidePanel({ ride, onRideChange, onCancelled }) {
           </div>
 
           <div className="mt-4">
-            {ride.status === "requested" && ride.matchedDriver && (
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-brand-500" />
-                <div>
-                  <p className="font-semibold text-slate-900">{copy.title}</p>
-                  <p className="text-sm text-slate-500">{copy.description}</p>
+            {ride.status === "requested" && (
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">
+                      Finding the best driver for you...
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Connecting to nearby available drivers. Hang tight!
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-            {ride.status === "requested" && !ride.matchedDriver && (
-              <div>
-                <p className="font-semibold text-amber-700">Finding nearby driver...</p>
-                <p className="text-sm text-slate-500">
-                  Scanning active drivers within 30km of your pickup location.
-                </p>
               </div>
             )}
             {copy && ride.status !== "requested" && (

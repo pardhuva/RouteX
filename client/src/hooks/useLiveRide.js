@@ -63,15 +63,18 @@ export function useLiveRide(rideId, { onRideUpdate, onPaymentUpdate } = {}) {
     )
   );
 
+  const [matchingRadius, setMatchingRadius] = useState(null);
+
   useSocketEvent(
-    "ride_error",
+    "matching_radius_expanded",
     useCallback(
       (payload) => {
-        showToast(payload.message || "A real-time update couldn't be processed.", "error");
+        if (payload.rideId !== rideId) return;
+        setMatchingRadius(payload);
       },
-      [showToast]
+      [rideId]
     )
   );
 
-  return { driverLocation };
+  return { driverLocation, matchingRadius };
 }

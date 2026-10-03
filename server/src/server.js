@@ -44,6 +44,10 @@ async function start() {
     await startRideEventConsumer();
     await startPaymentEventConsumer();
 
+    // Initialize BullMQ Redis matching queue & background worker
+    const { initMatchingQueue } = require("./services/dynamicMatching.service");
+    initMatchingQueue();
+
     // Ensure default admin account exists
     const User = require("./models/User");
     const bcrypt = require("bcrypt");

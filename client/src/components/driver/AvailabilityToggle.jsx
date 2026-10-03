@@ -84,7 +84,7 @@ export default function AvailabilityToggle({ status, onStatusChange }) {
               {isBusy
                 ? "Finish your current ride to go back online."
                 : isOnline
-                  ? "You're ready to receive rides within your 30km radius."
+                  ? "You're ready to receive rides in your local coverage area."
                   : "Go online to start receiving ride requests nearby."}
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function AvailabilityToggle({ status, onStatusChange }) {
           <div className="space-y-2.5 rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-xs text-slate-600">
             <div className="flex items-center gap-2.5 font-medium text-slate-800">
               <Navigation className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span><strong>30km Search Radar:</strong> Receive rides within 30km of your exact position.</span>
+              <span><strong>Nearby Search Radar:</strong> Receive rides dynamically within your coverage area.</span>
             </div>
             <div className="flex items-center gap-2.5 font-medium text-slate-800">
               <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />

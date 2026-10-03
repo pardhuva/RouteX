@@ -3,6 +3,7 @@ const Ride = require("../models/Ride");
 const Driver = require("../models/Driver");
 const ApiError = require("../utils/ApiError");
 const matchingService = require("./matching.service");
+const dynamicMatchingService = require("./dynamicMatching.service");
 const driverService = require("./driver.service");
 const driverSimulationService = require("./driverSimulationService");
 const kafkaProducer = require("./kafkaProducer");
@@ -50,37 +51,16 @@ async function createRide(riderId, { pickup, destination, vehicleType = "car", e
   });
   console.log(`[Ride] Created: ${ride._id} — vehicle: ${vehicleType} — status: REQUESTED — OTP PIN: ${otp}`);
 
-  // Best-effort nearby-driver lookup: it only annotates the ride with a
-  // candidate for display purposes, so a lookup failure or empty result
-  // must never block ride creation itself.
-  console.log(`[Ride] Searching for available driver near [${pickup.location.coordinates}] for vehicle type: ${vehicleType}`);
-  const nearestDriver = await matchingService.findNearestAvailableDriver(pickup.location.coordinates, vehicleType);
-  if (nearestDriver) {
-    console.log(`[Ride] Driver selected: ${nearestDriver.user} (driver doc ${nearestDriver._id})`);
-    ride.matchedDriver = nearestDriver.user;
-    await ride.save();
-
-    // Demo/portfolio mode: a seeded simulated driver stands in for the real
-    // driver app that would otherwise need to be open to accept this ride.
-    // A real matched driver is untouched — they keep the normal manual
-    // accept/reject flow via their own session.
-    if (nearestDriver.isSimulated) {
-      const realAvailableDriver = await Driver.findOne({ status: "available", isSimulated: { $ne: true } });
-      if (!realAvailableDriver) {
-        driverSimulationService.scheduleSimulatedAcceptance(ride._id, nearestDriver.user);
-      } else {
-        console.log("[Ride] Real driver is online — waiting for manual acceptance from driver dashboard");
-      }
-    }
-  } else {
-    console.log("[Ride] No available driver found within search radius");
-  }
-
   await kafkaProducer.publishEvent(KAFKA_TOPICS.rideEvents, RIDE_EVENT_TYPES.requested, {
     rideId: ride._id.toString(),
     riderId: riderId.toString(),
     driverId: null,
-    matchedDriverId: nearestDriver ? nearestDriver.user.toString() : null,
+    matchedDriverId: null,
+  });
+
+  // Start background dynamic expanding radius matching (3km -> 7km -> 15km)
+  dynamicMatchingService.startExpandingSearch(ride._id, pickup.location.coordinates, vehicleType).catch((err) => {
+    console.warn("[Ride] Expanding matching error:", err.message);
   });
 
   return populateRide(ride._id);
@@ -232,6 +212,7 @@ async function acceptRide(rideId, driverUser) {
   });
 
   await driverService.syncStatusCache(claimedDriverForCache);
+  dynamicMatchingService.cancelExpandingSearch(rideId);
 
   console.log(`[Ride] Driver accepted: ${ride._id} — driver ${driverUser._id} — status changed: ACCEPTED`);
 
@@ -373,6 +354,8 @@ async function cancelRide(rideId, user) {
     await matchWaitingRideToDriver(freedDriverForCache);
   }
 
+  dynamicMatchingService.cancelExpandingSearch(rideId);
+
   await kafkaProducer.publishEvent(KAFKA_TOPICS.rideEvents, RIDE_EVENT_TYPES.cancelled, {
     rideId: ride._id.toString(),
     riderId: ride.rider.toString(),
@@ -475,25 +458,35 @@ async function getAvailableRides(driverUser) {
   let rides = [];
   if (coords && (coords[0] !== 0 || coords[1] !== 0)) {
     try {
-      rides = await Ride.find({
+      // Find requested rides matching vehicle type within their active dynamic search radius
+      const candidateRides = await Ride.find({
         status: "requested",
         vehicleType: { $in: compatibleRideTypes },
         "pickup.location": {
           $near: {
             $geometry: { type: "Point", coordinates: coords },
-            $maxDistance: DRIVER_SEARCH_RADIUS_METERS, // 30km strictly
+            $maxDistance: DRIVER_SEARCH_RADIUS_METERS,
           },
         },
       })
-        .limit(20)
+        .limit(30)
         .populate("rider", "name phone")
         .lean();
+
+      // Only include rides whose current dynamic expanding radius actually reaches this driver
+      const { calculateDistanceKm } = require("../utils/geo");
+      rides = candidateRides.filter((r) => {
+        const pCoords = r.pickup?.location?.coordinates;
+        if (!pCoords || !coords) return false;
+        const distKm = calculateDistanceKm(coords[1], coords[0], pCoords[1], pCoords[0]);
+        const maxRadiusKm = (r.searchRadiusMeters || 3000) / 1000;
+        return distKm <= maxRadiusKm;
+      });
     } catch (e) {
       console.warn("[RideService] Geospatial search error in getAvailableRides:", e.message);
     }
   }
 
-  // Strictly enforce 30km radius & vehicle type compatibility
   return rides;
 }
 

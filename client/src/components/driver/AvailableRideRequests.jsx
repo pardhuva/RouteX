@@ -110,7 +110,7 @@ export default function AvailableRideRequests({ isOnline, onRideAccepted }) {
         </div>
         <h3 className="mt-3 text-base font-bold text-slate-800">You are currently offline</h3>
         <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-          Switch your status to <span className="font-semibold text-emerald-600">Online</span> above to start receiving live ride requests in your area (30km radius).
+          Switch your status to <span className="font-semibold text-emerald-600">Online</span> above to start receiving live ride requests in your area.
         </p>
       </div>
     );
@@ -137,7 +137,7 @@ export default function AvailableRideRequests({ isOnline, onRideAccepted }) {
       {loading && requests.length === 0 ? (
         <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-slate-400">
           <Loader2 className="h-6 w-6 animate-spin text-brand-600 mr-2" />
-          <span className="text-sm font-medium">Scanning live driver requests (30km radius)...</span>
+          <span className="text-sm font-medium">Scanning live driver requests in your area...</span>
         </div>
       ) : requests.length === 0 ? (
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
@@ -146,7 +146,7 @@ export default function AvailableRideRequests({ isOnline, onRideAccepted }) {
           </div>
           <h3 className="text-base font-bold text-slate-900">Radar Active — Searching for Nearby Requests</h3>
           <p className="mt-1 text-xs text-slate-500 max-w-md mx-auto">
-            You are online and ready! When a rider requests a trip within your 30km coverage radius, it will appear right here with instant 1-tap acceptance.
+            You are online and ready! When a rider requests a trip within your local coverage radius, it will appear right here with instant 1-tap acceptance.
           </p>
         </div>
       ) : (

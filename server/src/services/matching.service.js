@@ -23,7 +23,12 @@ function getCompatibleVehicleTypes(requestedType = "car") {
   return ["car", "sedan", "suv"];
 }
 
-async function findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleType = "car") {
+async function findNearestAvailableDriverFromMongo(
+  pickupCoordinates,
+  vehicleType = "car",
+  radiusMeters = DRIVER_SEARCH_RADIUS_METERS,
+  excludeDriverUserIds = []
+) {
   const start = process.hrtime.bigint();
   const User = require("../models/User");
   const Vehicle = require("../models/Vehicle");
@@ -33,14 +38,17 @@ async function findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleTyp
   const matchingVehicles = await Vehicle.find({ vehicleType: { $in: compatibleTypes } }).select("_id");
   const matchingVehicleIds = matchingVehicles.map((v) => v._id);
 
+  const excludeFilter = excludeDriverUserIds.length > 0 ? { user: { $nin: excludeDriverUserIds } } : {};
+
   const nearestReal = await Driver.findOne({
     status: "available",
     isSimulated: { $ne: true },
     vehicle: { $in: matchingVehicleIds },
+    ...excludeFilter,
     currentLocation: {
       $near: {
         $geometry: { type: "Point", coordinates: pickupCoordinates },
-        $maxDistance: DRIVER_SEARCH_RADIUS_METERS,
+        $maxDistance: radiusMeters,
       },
     },
   });
@@ -51,17 +59,18 @@ async function findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleTyp
       status: "available",
       isSimulated: true,
       vehicle: { $in: matchingVehicleIds },
+      ...excludeFilter,
       currentLocation: {
         $near: {
           $geometry: { type: "Point", coordinates: pickupCoordinates },
-          $maxDistance: DRIVER_SEARCH_RADIUS_METERS,
+          $maxDistance: radiusMeters,
         },
       },
     });
   }
 
   // If no driver found within search radius, find ANY available simulated driver of the matching vehicle type
-  if (!driver) {
+  if (!driver && excludeDriverUserIds.length === 0) {
     const anySimulated = await Driver.findOne({
       status: "available",
       isSimulated: true,
@@ -138,9 +147,13 @@ async function findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleTyp
   return driver;
 }
 
-// RouteX Fast-Path Driver Matching:
-// Checks for available driver of the requested vehicleType.
-async function findNearestAvailableDriver(pickupCoordinates, vehicleType = "car") {
+// RouteX Fast-Path Driver Matching with configurable radius and exclusion filter
+async function findNearestAvailableDriver(
+  pickupCoordinates,
+  vehicleType = "car",
+  radiusMeters = DRIVER_SEARCH_RADIUS_METERS,
+  excludeDriverUserIds = []
+) {
   const [longitude, latitude] = pickupCoordinates;
   const start = process.hrtime.bigint();
 
@@ -148,10 +161,10 @@ async function findNearestAvailableDriver(pickupCoordinates, vehicleType = "car"
     REDIS_KEYS.driversGeoSet,
     longitude,
     latitude,
-    DRIVER_SEARCH_RADIUS_METERS
+    radiusMeters
   );
 
-  if (nearestDriverId) {
+  if (nearestDriverId && !excludeDriverUserIds.map(String).includes(String(nearestDriverId))) {
     const Vehicle = require("../models/Vehicle");
     const compatibleTypes = getCompatibleVehicleTypes(vehicleType);
     const matchingVehicles = await Vehicle.find({ vehicleType: { $in: compatibleTypes } }).select("_id");
@@ -177,7 +190,42 @@ async function findNearestAvailableDriver(pickupCoordinates, vehicleType = "car"
   }
 
   // Fallback to MongoDB
-  return findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleType);
+  return findNearestAvailableDriverFromMongo(pickupCoordinates, vehicleType, radiusMeters, excludeDriverUserIds);
 }
 
-module.exports = { findNearestAvailableDriver, findNearestAvailableDriverFromMongo, getCompatibleVehicleTypes };
+// Finds all eligible available drivers within given radius
+async function findAllAvailableDriversInRange(
+  pickupCoordinates,
+  vehicleType = "car",
+  radiusMeters = DRIVER_SEARCH_RADIUS_METERS,
+  excludeDriverUserIds = []
+) {
+  const Vehicle = require("../models/Vehicle");
+  const compatibleTypes = getCompatibleVehicleTypes(vehicleType);
+  const matchingVehicles = await Vehicle.find({ vehicleType: { $in: compatibleTypes } }).select("_id");
+  const matchingVehicleIds = matchingVehicles.map((v) => v._id);
+
+  const excludeFilter = excludeDriverUserIds.length > 0 ? { user: { $nin: excludeDriverUserIds } } : {};
+
+  const drivers = await Driver.find({
+    status: "available",
+    vehicle: { $in: matchingVehicleIds },
+    ...excludeFilter,
+    "currentLocation.coordinates": { $ne: [0, 0] },
+    currentLocation: {
+      $near: {
+        $geometry: { type: "Point", coordinates: pickupCoordinates },
+        $maxDistance: radiusMeters,
+      },
+    },
+  }).populate("vehicle");
+
+  return drivers;
+}
+
+module.exports = {
+  findNearestAvailableDriver,
+  findNearestAvailableDriverFromMongo,
+  findAllAvailableDriversInRange,
+  getCompatibleVehicleTypes,
+};
