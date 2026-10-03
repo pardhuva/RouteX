@@ -14,35 +14,55 @@ const {
 // Maximum search lifecycle before automatically timing out (2 minutes = 120,000ms)
 const MAX_SEARCH_TIMEOUT_MS = Number(process.env.MAX_SEARCH_TIMEOUT_MS) || 120000;
 
+// In-memory timer tracker for local development when Redis is not running
+const inMemoryTimers = new Map();
+
 // Shared Redis connection for BullMQ
 let redisConnection = null;
 let matchingQueue = null;
 let matchingWorker = null;
+let isRedisAvailable = null; // null: untested, true: available, false: offline
 
 function getRedisConnection() {
+  if (isRedisAvailable === false) return null;
   if (!redisConnection) {
-    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
-    redisConnection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null, // Required by BullMQ
-      enableReadyCheck: false,
-      retryStrategy: (times) => {
-        if (times > 10) return null;
-        return Math.min(times * 200, 3000);
-      },
-    });
+    try {
+      const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+      redisConnection = new IORedis(redisUrl, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: true,
+        retryStrategy: (times) => {
+          if (times > 3) {
+            isRedisAvailable = false;
+            return null; // Stop retrying
+          }
+          return Math.min(times * 300, 1500);
+        },
+      });
 
-    redisConnection.on("error", (err) => {
-      console.warn("[BullMQ:Redis] Connection notice:", err.message);
-    });
+      redisConnection.on("error", (err) => {
+        if (isRedisAvailable !== false) {
+          isRedisAvailable = false;
+          // Silent notice - already reported by redis.service fallback
+        }
+      });
+    } catch (err) {
+      isRedisAvailable = false;
+      return null;
+    }
   }
   return redisConnection;
 }
 
 function initMatchingQueue() {
+  if (isRedisAvailable === false) return null;
   if (matchingQueue) return matchingQueue;
 
   try {
     const connection = getRedisConnection();
+    if (!connection) return null;
+
     matchingQueue = new Queue("routex-matching-queue", { connection });
 
     matchingWorker = new Worker(
@@ -60,61 +80,97 @@ function initMatchingQueue() {
       { connection, concurrency: 10 }
     );
 
-    matchingWorker.on("completed", (job) => {
-      // Clean finished job
+    matchingWorker.on("completed", () => {});
+
+    matchingWorker.on("error", (err) => {
+      // Catch worker redis connection errors silently if redis drops
+      isRedisAvailable = false;
     });
 
     matchingWorker.on("failed", (job, err) => {
       console.warn(`[BullMQ:Worker] Job ${job?.id} failed:`, err.message);
     });
 
-    console.log("[BullMQ] Matching Queue & Worker initialized successfully");
+    console.log("[BullMQ] Matching Queue & Worker initialized");
   } catch (err) {
-    console.warn("[BullMQ] Failed to initialize queue, continuing with in-memory fallback:", err.message);
+    isRedisAvailable = false;
   }
 
   return matchingQueue;
 }
 
 /**
- * Initiates the multi-tier dynamic expanding radius matching process for a ride using BullMQ.
+ * Initiates the multi-tier dynamic expanding radius matching process for a ride.
+ * Uses BullMQ if Redis is active, or high-performance in-memory timers if Redis is offline.
  */
 async function startExpandingSearch(rideId, pickupCoordinates, vehicleType) {
-  const queue = initMatchingQueue();
   const rideStrId = rideId.toString();
+  cancelExpandingSearch(rideStrId);
 
-  // 1. Process Tier 0 immediately
-  if (queue) {
-    await queue.add(
-      `match:${rideStrId}:tier0`,
-      {
-        rideId: rideStrId,
-        pickupCoordinates,
-        vehicleType,
-        tierIndex: 0,
-        action: "search",
-      },
-      { jobId: `match:${rideStrId}:tier0`, removeOnComplete: true, removeOnFail: true }
-    );
-
-    // 2. Schedule the 2-minute max timeout job
-    await queue.add(
-      `timeout:${rideStrId}`,
-      {
-        rideId: rideStrId,
-        action: "timeout_check",
-      },
-      {
-        jobId: `timeout:${rideStrId}`,
-        delay: MAX_SEARCH_TIMEOUT_MS,
-        removeOnComplete: true,
-        removeOnFail: true,
-      }
-    );
-  } else {
-    // In-memory fallback if Redis is offline
-    await processSearchTierJob(rideStrId, pickupCoordinates, vehicleType, 0);
+  let queue = null;
+  try {
+    queue = initMatchingQueue();
+  } catch (e) {
+    queue = null;
   }
+
+  if (queue && isRedisAvailable !== false) {
+    try {
+      // 1. Process Tier 0 immediately
+      await queue.add(
+        `match:${rideStrId}:tier0`,
+        {
+          rideId: rideStrId,
+          pickupCoordinates,
+          vehicleType,
+          tierIndex: 0,
+          action: "search",
+        },
+        { jobId: `match:${rideStrId}:tier0`, removeOnComplete: true, removeOnFail: true }
+      );
+
+      // 2. Schedule the 2-minute max timeout job
+      await queue.add(
+        `timeout:${rideStrId}`,
+        {
+          rideId: rideStrId,
+          action: "timeout_check",
+        },
+        {
+          jobId: `timeout:${rideStrId}`,
+          delay: MAX_SEARCH_TIMEOUT_MS,
+          removeOnComplete: true,
+          removeOnFail: true,
+        }
+      );
+      return;
+    } catch (err) {
+      // If adding to queue fails (e.g. Redis connection refused), fallback to in-memory
+      isRedisAvailable = false;
+    }
+  }
+
+  // --- In-Memory Fallback Engine ---
+  const timers = { tierTimers: [], timeoutTimer: null };
+
+  // 1. Execute Tier 0 immediately
+  await processSearchTierJob(rideStrId, pickupCoordinates, vehicleType, 0);
+
+  // 2. Schedule progressive expansion for remaining tiers
+  for (let i = 1; i < MATCHING_RADIUS_TIERS.length; i++) {
+    const delay = i * TIER_EXPANSION_DELAY_MS;
+    const t = setTimeout(async () => {
+      await processSearchTierJob(rideStrId, pickupCoordinates, vehicleType, i);
+    }, delay);
+    timers.tierTimers.push(t);
+  }
+
+  // 3. Schedule 2-minute auto-timeout
+  timers.timeoutTimer = setTimeout(async () => {
+    await handleRideSearchTimeout(rideStrId);
+  }, MAX_SEARCH_TIMEOUT_MS);
+
+  inMemoryTimers.set(rideStrId, timers);
 }
 
 /**
@@ -274,21 +330,32 @@ async function handleRideSearchTimeout(rideId) {
 }
 
 /**
- * Cancels all pending BullMQ matching and timeout jobs for a ride.
+ * Cancels all pending matching and timeout jobs for a ride (both BullMQ & in-memory timers).
  */
 async function cancelExpandingSearch(rideId) {
   if (!rideId) return;
   const rideStrId = rideId.toString();
 
+  // 1. Clear in-memory timers
+  if (inMemoryTimers.has(rideStrId)) {
+    const timers = inMemoryTimers.get(rideStrId);
+    if (timers.tierTimers) {
+      timers.tierTimers.forEach((t) => clearTimeout(t));
+    }
+    if (timers.timeoutTimer) {
+      clearTimeout(timers.timeoutTimer);
+    }
+    inMemoryTimers.delete(rideStrId);
+  }
+
+  // 2. Clear BullMQ jobs
   try {
-    const queue = initMatchingQueue();
-    if (queue) {
-      // Remove all tier jobs and timeout job
+    if (matchingQueue && isRedisAvailable !== false) {
       for (let i = 0; i < MATCHING_RADIUS_TIERS.length; i++) {
-        const job = await queue.getJob(`match:${rideStrId}:tier${i}`);
+        const job = await matchingQueue.getJob(`match:${rideStrId}:tier${i}`);
         if (job) await job.remove().catch(() => {});
       }
-      const timeoutJob = await queue.getJob(`timeout:${rideStrId}`);
+      const timeoutJob = await matchingQueue.getJob(`timeout:${rideStrId}`);
       if (timeoutJob) await timeoutJob.remove().catch(() => {});
     }
   } catch (err) {

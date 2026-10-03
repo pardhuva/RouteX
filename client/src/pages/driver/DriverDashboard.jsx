@@ -156,7 +156,7 @@ export default function DriverDashboard() {
       )}
 
       {activeRide ? (
-        <DriverActiveRidePanel ride={activeRide} onRideChange={handleRideChange} />
+        <DriverActiveRidePanel ride={activeRide} driver={driver} onRideChange={handleRideChange} />
       ) : (
         <div className="space-y-6">
           <AvailableRideRequests

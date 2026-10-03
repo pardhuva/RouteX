@@ -18,10 +18,22 @@ function toLatLng(point) {
   return { latitude, longitude };
 }
 
-export default function DriverActiveRidePanel({ ride, onRideChange }) {
+export default function DriverActiveRidePanel({ ride, driver, onRideChange }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [myLocation, setMyLocation] = useState(null);
+  
+  const [myLocation, setMyLocation] = useState(() => {
+    const coords = driver?.currentLocation?.coordinates;
+    if (coords && (coords[0] !== 0 || coords[1] !== 0)) {
+      return { latitude: coords[1], longitude: coords[0] };
+    }
+    try {
+      const cached = localStorage.getItem("routex_driver_last_loc");
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return null;
+  });
+
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
 
@@ -35,6 +47,9 @@ export default function DriverActiveRidePanel({ ride, onRideChange }) {
         (position) => {
           const { latitude, longitude } = position.coords;
           setMyLocation({ latitude, longitude });
+          try {
+            localStorage.setItem("routex_driver_last_loc", JSON.stringify({ latitude, longitude }));
+          } catch (_) {}
           sendDriverLocation(ride._id, latitude, longitude);
         },
         () => {},
@@ -164,7 +179,38 @@ export default function DriverActiveRidePanel({ ride, onRideChange }) {
         </div>
       </div>
 
-      <div className="lg:col-span-3">
+      <div className="lg:col-span-3 flex flex-col gap-3">
+        {ride.status === "accepted" && (
+          <div className="flex items-center justify-between rounded-xl bg-sky-50 border border-sky-200 px-4 py-2.5 text-xs text-sky-900 shadow-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-sky-500 animate-pulse" />
+              <span>
+                <strong>Approach Route:</strong> Navigating from your location to passenger pickup
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-1.5 w-4 rounded-full bg-sky-500" /> Driver → Pickup
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-1.5 w-4 rounded-full bg-indigo-500" /> Pickup → Dropoff
+              </span>
+            </div>
+          </div>
+        )}
+
+        {ride.status === "started" && (
+          <div className="flex items-center justify-between rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-2.5 text-xs text-indigo-900 shadow-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-indigo-600 animate-pulse" />
+              <span>
+                <strong>Trip In Progress:</strong> Navigating passenger to drop-off point
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-indigo-600">Active Live Tracking</span>
+          </div>
+        )}
+
         <MapView
           center={myLocation || pickupPoint}
           pickup={pickupPoint}
@@ -173,7 +219,6 @@ export default function DriverActiveRidePanel({ ride, onRideChange }) {
           rideStatus={ride.status}
           className="h-80 w-full lg:h-full lg:min-h-[420px]"
         />
-
       </div>
     </div>
   );
