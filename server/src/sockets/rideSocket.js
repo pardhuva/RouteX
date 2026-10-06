@@ -57,6 +57,31 @@ function registerRideSocketHandlers(io, socket) {
     }
   });
 
+  socket.on("join_tracking", async (payload = {}) => {
+    try {
+      const { trackingToken } = payload;
+      if (!trackingToken) {
+        return emitError(socket, "Invalid tracking token");
+      }
+
+      const ride = await Ride.findOne({
+        $or: [
+          { trackingToken },
+          ...(mongoose.isValidObjectId(trackingToken) ? [{ _id: trackingToken }] : []),
+        ],
+      });
+
+      if (!ride) {
+        return emitError(socket, "Tracked ride not found");
+      }
+
+      socket.join(`ride:${ride._id.toString()}`);
+      socket.emit("tracking_joined", { rideId: ride._id, trackingToken: ride.trackingToken });
+    } catch (err) {
+      emitError(socket, "Failed to join live trip tracking");
+    }
+  });
+
   socket.on(SOCKET_EVENTS.clientToServer.driverLocationUpdate, async (payload = {}) => {
     try {
       const { rideId, latitude, longitude } = payload;
@@ -120,9 +145,42 @@ function registerRideSocketHandlers(io, socket) {
     }
   });
 
+  // Rider real-time safety alert trigger
+  socket.on(SOCKET_EVENTS.clientToServer.triggerSafetyAlert, async (payload = {}) => {
+    try {
+      const { rideId, alertType, description } = payload;
+      const safetyService = require("../services/safety.service");
+      const alert = await safetyService.triggerSafetyAlert({
+        rideId,
+        riderUser: { _id: socket.user.id, name: socket.user.name, email: socket.user.email },
+        alertType,
+        description,
+      });
+      socket.emit(SOCKET_EVENTS.serverToClient.safetyAlertCreated, { alert, rideId, success: true });
+    } catch (err) {
+      emitError(socket, err.message || "Failed to trigger safety alert");
+    }
+  });
+
+  // Rider real-time safety confirmation (Reached Safely)
+  socket.on(SOCKET_EVENTS.clientToServer.confirmSafety, async (payload = {}) => {
+    try {
+      const { rideId } = payload;
+      const safetyService = require("../services/safety.service");
+      const alert = await safetyService.confirmSafety({
+        rideId,
+        riderUser: { _id: socket.user.id },
+      });
+      socket.emit(SOCKET_EVENTS.serverToClient.safetyConfirmationUpdated, { alert, rideId, success: true });
+    } catch (err) {
+      emitError(socket, err.message || "Failed to confirm safety");
+    }
+  });
+
   socket.on("disconnect", () => {
     lastLocationUpdateAt.delete(socket.user.id);
   });
 }
 
 module.exports = registerRideSocketHandlers;
+

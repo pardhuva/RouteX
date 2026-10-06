@@ -137,7 +137,7 @@ export default function SupportReportModal({ open, onClose, rideId, role = "ride
                     onClick={() => handleCategoryChange(c.id)}
                     className={`flex w-full items-center justify-between rounded-xl border p-2.5 text-left text-xs font-semibold transition-all ${
                       isSelected
-                        ? "border-brand-600 bg-brand-50/70 text-brand-900 shadow-xs ring-1 ring-brand-500"
+                        ? "border-brand-600 bg-brand-50 text-brand-900 shadow-xs ring-1 ring-brand-500"
                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >

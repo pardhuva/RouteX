@@ -12,6 +12,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
+import PublicRideTracker from "./pages/PublicRideTracker";
 import NotFound from "./pages/NotFound";
 
 import RiderDashboard from "./pages/rider/RiderDashboard";
@@ -36,6 +37,7 @@ export default function App() {
         <ToastProvider>
           <Routes>
             <Route path="/" element={<Landing />} />
+            <Route path="/track/:trackingToken" element={<PublicRideTracker />} />
 
             <Route element={<GuestRoute />}>
               <Route path="/login" element={<Login />} />

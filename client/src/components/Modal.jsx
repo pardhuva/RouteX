@@ -20,9 +20,9 @@ export default function Modal({ open, onClose, title, children, size = "md" }) {
   const widthClass = size === "lg" ? "max-w-lg" : size === "sm" ? "max-w-sm" : "max-w-md";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
       <div
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs animate-fade-in"
+        className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -30,7 +30,7 @@ export default function Modal({ open, onClose, title, children, size = "md" }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${widthClass} animate-slide-up rounded-xl border border-slate-200 bg-white p-5 shadow-panel`}
+        className={`relative z-10 w-full ${widthClass} animate-slide-up rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl my-auto`}
       >
         <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
           {title && <h2 className="text-base font-bold text-slate-900">{title}</h2>}

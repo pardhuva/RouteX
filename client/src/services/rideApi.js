@@ -43,3 +43,22 @@ export function cancelRide(rideId) {
 export function rateDriver(rideId, { rating, feedback } = {}) {
   return api.post(`/rides/${rideId}/rate`, { rating, feedback });
 }
+
+// Rider Safety Monitoring & Check-In
+export function triggerSafetyAlert(rideId, { alertType = "rider_unsafe", description = "" } = {}) {
+  return api.post(`/rides/${rideId}/safety-alert`, { alertType, description });
+}
+
+export function confirmSafety(rideId) {
+  return api.post(`/rides/${rideId}/safety-confirmation`);
+}
+
+export function getRideSafetyStatus(rideId) {
+  return api.get(`/rides/${rideId}/safety-status`);
+}
+
+// Public Live Trip Tracking for Family & Emergency Contacts (Unauthenticated)
+export function getPublicRideTracking(trackingToken) {
+  return api.get(`/rides/track/${trackingToken}`);
+}
+

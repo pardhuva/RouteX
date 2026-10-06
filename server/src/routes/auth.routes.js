@@ -43,6 +43,7 @@ router.patch(
       .optional()
       .matches(/^[0-9]{10}$/)
       .withMessage("Phone number must be a valid 10-digit number"),
+    body("emergencyContacts").optional().isArray().withMessage("emergencyContacts must be an array"),
   ],
   authController.updateProfile
 );

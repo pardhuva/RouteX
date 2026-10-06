@@ -40,6 +40,25 @@ const userSchema = new mongoose.Schema(
       ref: "Ride",
       default: null,
     },
+    emergencyContacts: [
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        phone: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        relationship: {
+          type: String,
+          trim: true,
+          default: "Family",
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -27,6 +27,7 @@ function assertValidTransition(currentStatus, nextStatus) {
   }
 }
 
+const crypto = require("crypto");
 const User = require("../models/User");
 
 async function createRide(riderId, { pickup, destination, vehicleType = "car", estimatedFare = null }) {
@@ -39,6 +40,7 @@ async function createRide(riderId, { pickup, destination, vehicleType = "car", e
   }
 
   const otp = String(Math.floor(1000 + Math.random() * 9000));
+  const trackingToken = crypto.randomBytes(12).toString("hex");
   const ride = await Ride.create({
     rider: riderId,
     driver: null,
@@ -48,8 +50,9 @@ async function createRide(riderId, { pickup, destination, vehicleType = "car", e
     estimatedFare,
     status: "requested",
     otp,
+    trackingToken,
   });
-  console.log(`[Ride] Created: ${ride._id} — vehicle: ${vehicleType} — status: REQUESTED — OTP PIN: ${otp}`);
+  console.log(`[Ride] Created: ${ride._id} — vehicle: ${vehicleType} — status: REQUESTED — OTP PIN: ${otp} — tracking: ${trackingToken}`);
 
   await kafkaProducer.publishEvent(KAFKA_TOPICS.rideEvents, RIDE_EVENT_TYPES.requested, {
     rideId: ride._id.toString(),
@@ -109,6 +112,13 @@ async function populateRide(rideId) {
     const fallbackOtp = String((parseInt(ride._id.toString().slice(-4), 16) % 9000) + 1000);
     ride.otp = fallbackOtp;
     Ride.updateOne({ _id: rideId, otp: null }, { $set: { otp: fallbackOtp } }).catch(() => {});
+  }
+
+  // Ensure ride has trackingToken
+  if (ride && !ride.trackingToken) {
+    const fallbackToken = crypto.randomBytes(12).toString("hex");
+    ride.trackingToken = fallbackToken;
+    Ride.updateOne({ _id: rideId, trackingToken: null }, { $set: { trackingToken: fallbackToken } }).catch(() => {});
   }
 
   return ride;
@@ -548,9 +558,102 @@ async function rateDriver(rideId, riderUser, { rating, feedback }) {
   return populateRide(updatedRide._id);
 }
 
+async function getPublicRideTracking(trackingToken) {
+  if (!trackingToken || typeof trackingToken !== "string") {
+    throw new ApiError(400, "Invalid tracking token");
+  }
+
+  let ride = await Ride.findOne({ trackingToken })
+    .populate("rider", "name")
+    .populate("driver", "name phone");
+
+  // Fallback: Check if trackingToken is an ObjectId
+  if (!ride && mongoose.isValidObjectId(trackingToken)) {
+    ride = await Ride.findById(trackingToken)
+      .populate("rider", "name")
+      .populate("driver", "name phone");
+    if (ride && !ride.trackingToken) {
+      ride.trackingToken = crypto.randomBytes(12).toString("hex");
+      await ride.save();
+    }
+  }
+
+  if (!ride) {
+    throw new ApiError(404, "Trip tracking link not found or expired");
+  }
+
+  // Fetch driver vehicle and rating
+  let vehicle = null;
+  let driverRating = 5.0;
+  if (ride.driver) {
+    const driverDoc = await Driver.findOne({ user: ride.driver._id }).select("vehicle rating totalTrips");
+    if (driverDoc) {
+      vehicle = driverDoc.vehicle || null;
+      driverRating = driverDoc.rating || 5.0;
+    }
+  }
+
+  // Fetch live Redis location
+  let liveLocation = null;
+  try {
+    const redisService = require("./redis.service");
+    const { REDIS_KEYS } = require("../config/constants");
+    const rawLoc = await redisService.get(REDIS_KEYS.rideDriverLocation(ride._id.toString()));
+    if (rawLoc) {
+      const parsed = typeof rawLoc === "string" ? JSON.parse(rawLoc) : rawLoc;
+      liveLocation = {
+        latitude: parsed.latitude || parsed.lat,
+        longitude: parsed.longitude || parsed.lng || parsed.lon,
+        updatedAt: parsed.timestamp || parsed.updatedAt || new Date().toISOString(),
+      };
+    }
+  } catch (err) {
+    // Redis graceful fallback
+  }
+
+  // Fetch safety alert state
+  const SafetyAlert = require("../models/SafetyAlert");
+  const activeAlert = await SafetyAlert.findOne({ ride: ride._id, status: "active" });
+  const latestAlert = activeAlert || (await SafetyAlert.findOne({ ride: ride._id }).sort({ createdAt: -1 }));
+
+  return {
+    rideId: ride._id,
+    trackingToken: ride.trackingToken,
+    status: ride.status,
+    pickup: ride.pickup,
+    destination: ride.destination,
+    vehicleType: ride.vehicleType,
+    requestedAt: ride.requestedAt,
+    acceptedAt: ride.acceptedAt,
+    startedAt: ride.startedAt,
+    completedAt: ride.completedAt,
+    rider: {
+      name: ride.rider?.name || "Rider",
+    },
+    driver: ride.driver
+      ? {
+          name: ride.driver.name,
+          phone: ride.driver.phone,
+          rating: driverRating,
+          vehicle: vehicle,
+        }
+      : null,
+    liveLocation: liveLocation || {
+      latitude: ride.pickup?.location?.coordinates?.[1] || 12.9716,
+      longitude: ride.pickup?.location?.coordinates?.[0] || 77.5946,
+    },
+    safety: {
+      hasActiveAlert: Boolean(activeAlert),
+      safeConfirmationAt: latestAlert?.safeConfirmationAt || null,
+      status: activeAlert ? "alert_active" : latestAlert?.safeConfirmationAt ? "reached_safely" : "normal",
+    },
+  };
+}
+
 module.exports = {
   createRide,
   getRideById,
+  getPublicRideTracking,
   getMyRides,
   getAvailableRides,
   acceptRide,

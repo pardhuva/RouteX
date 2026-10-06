@@ -38,6 +38,8 @@ async function login(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
 async function getProfile(req, res, next) {
   try {
     const user = await authService.getProfile(req.user._id);

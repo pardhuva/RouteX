@@ -26,11 +26,25 @@ export function useGeolocation() {
         setError(null);
         setLoading(false);
       },
-      (err) => {
-        setError(err.message || "Unable to retrieve your location");
-        setLoading(false);
+      () => {
+        // Fallback attempt without high accuracy (faster on Wi-Fi / laptops)
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setCoords({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
+            setError(null);
+            setLoading(false);
+          },
+          (err) => {
+            setError(err.message || "Unable to retrieve your location");
+            setLoading(false);
+          },
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 4000, maximumAge: 30000 }
     );
   }, []);
 

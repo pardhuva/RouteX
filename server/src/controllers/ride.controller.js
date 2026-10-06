@@ -131,11 +131,26 @@ async function rateDriver(req, res, next) {
   }
 }
 
+async function getPublicRideTracking(req, res, next) {
+  try {
+    const trackingData = await rideService.getPublicRideTracking(req.params.token);
+
+    res.status(200).json({
+      success: true,
+      message: "Live trip telemetry fetched successfully",
+      data: trackingData,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRide,
   getMyRides,
   getAvailableRides,
   getRide,
+  getPublicRideTracking,
   acceptRide,
   startRide,
   completeRide,

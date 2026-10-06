@@ -12,8 +12,13 @@ const User = require("../models/User");
 async function socketAuthenticate(socket, next) {
   try {
     const token = socket.handshake.auth && socket.handshake.auth.token;
+    const trackingToken = socket.handshake.auth && (socket.handshake.auth.trackingToken || socket.handshake.auth.isGuest);
 
     if (!token) {
+      if (trackingToken) {
+        socket.user = { id: `guest_${socket.id.slice(0, 8)}`, role: "guest" };
+        return next();
+      }
       return next(new Error("Authentication token missing"));
     }
 
@@ -21,6 +26,10 @@ async function socketAuthenticate(socket, next) {
     try {
       payload = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
+      if (trackingToken) {
+        socket.user = { id: `guest_${socket.id.slice(0, 8)}`, role: "guest" };
+        return next();
+      }
       return next(new Error("Invalid or expired authentication token"));
     }
 

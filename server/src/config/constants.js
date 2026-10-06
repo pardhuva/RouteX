@@ -66,12 +66,21 @@ const RIDE_EVENT_TYPES = {
   started: "ride.started",
   completed: "ride.completed",
   cancelled: "ride.cancelled",
+  safetyAlertCreated: "ride.safety_alert_created",
+  safetyConfirmed: "ride.safety_confirmed",
+  safetyResolved: "ride.safety_resolved",
 };
 
 const PAYMENT_EVENT_TYPES = {
   created: "payment.created",
   success: "payment.success",
   failed: "payment.failed",
+};
+
+const SAFETY_ALERT_STATUSES = {
+  active: "active",
+  resolved: "resolved",
+  followUp: "follow_up",
 };
 
 // Fare is deliberately simple and fully backend-controlled — see
@@ -175,6 +184,8 @@ const SOCKET_EVENTS = {
   clientToServer: {
     joinRide: "join_ride",
     driverLocationUpdate: "driver_location_update",
+    triggerSafetyAlert: "trigger_safety_alert",
+    confirmSafety: "confirm_safety",
   },
   serverToClient: {
     rideJoined: "ride_joined",
@@ -182,13 +193,11 @@ const SOCKET_EVENTS = {
     driverLocationUpdated: "driver_location_updated",
     paymentStatusUpdated: "payment_status_updated",
     matchingRadiusExpanded: "matching_radius_expanded",
-    // Pushed to a specific driver's personal room (`driver:<userId>`, see
-    // config/socket.js) when they're the nearest-match candidate for a new
-    // ride — the piece Day 6 originally left advisory-only/frontend-only.
-    // Unlike the other events above, this isn't broadcast to a *ride* room
-    // (the driver hasn't accepted, so isn't a participant yet).
     newRideRequest: "new_ride_request",
     rideError: "ride_error",
+    safetyAlertCreated: "safety_alert_created",
+    safetyAlertUpdated: "safety_alert_updated",
+    safetyConfirmationUpdated: "safety_confirmation_updated",
   },
 };
 
@@ -204,6 +213,7 @@ module.exports = {
   PAYMENT_CONSUMER_GROUP,
   RIDE_EVENT_TYPES,
   PAYMENT_EVENT_TYPES,
+  SAFETY_ALERT_STATUSES,
   VEHICLE_TIERS,
   FARE_CONFIG,
   DRIVER_COMMISSION_RATE,

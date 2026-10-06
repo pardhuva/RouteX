@@ -15,29 +15,52 @@ export default function AvailabilityToggle({ status, onStatusChange }) {
   const isOnline = status === "available";
   const isBusy = status === "busy";
 
-  async function handleConfirmGoOnline() {
+  async function handleConfirmGoOnline(forceFallback = false) {
     setUpdating(true);
     setPermissionError(null);
     try {
-      if (!navigator.geolocation) {
-        throw new Error("This browser does not support geolocation.");
+      let coords = null;
+
+      if (!forceFallback && navigator.geolocation) {
+        coords = await new Promise((resolve) => {
+          // Attempt 1: Fast standard accuracy with cached positions allowed
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve([pos.coords.longitude, pos.coords.latitude]),
+            () => {
+              // Attempt 2: Fallback with highAccuracy off
+              navigator.geolocation.getCurrentPosition(
+                (pos) => resolve([pos.coords.longitude, pos.coords.latitude]),
+                () => resolve(null), // Graceful fallback
+                { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+              );
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+          );
+        });
       }
 
-      const coords = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => resolve([position.coords.longitude, position.coords.latitude]),
-          (err) => {
-            if (err.code === 1) {
-              reject(new Error("Location permission was denied. Please allow location access in your browser settings."));
-            } else if (err.code === 2) {
-              reject(new Error("Device GPS position unavailable. Please ensure your location service is enabled."));
-            } else {
-              reject(new Error(err.message || "Unable to retrieve your coordinates."));
+      // If device GPS is timed out or unavailable on desktop/laptops, use demo city center
+      if (!coords) {
+        try {
+          const cached = localStorage.getItem("routex_driver_last_loc");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.latitude && parsed.longitude) {
+              coords = [parsed.longitude, parsed.latitude];
             }
-          },
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-      });
+          }
+        } catch (_) {}
+      }
+
+      if (!coords) {
+        // Default City Coordinates (Hyderabad / Bangalore Hub)
+        coords = [78.3772, 17.4435];
+        showToast("GPS timed out. Connected using default city coordinates.", "info");
+      } else {
+        try {
+          localStorage.setItem("routex_driver_last_loc", JSON.stringify({ latitude: coords[1], longitude: coords[0] }));
+        } catch (_) {}
+      }
 
       await driverApi.updateDriverLocation(coords);
       const res = await driverApi.updateDriverStatus("available");
@@ -173,7 +196,7 @@ export default function AvailabilityToggle({ status, onStatusChange }) {
             </div>
           )}
 
-          <div className="mt-4 flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <Button
               variant="secondary"
               size="sm"
@@ -183,11 +206,20 @@ export default function AvailabilityToggle({ status, onStatusChange }) {
               Cancel
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              loading={updating}
+              onClick={() => handleConfirmGoOnline(true)}
+              className="text-slate-600 hover:text-slate-900 border-slate-200"
+            >
+              Use City Coordinates
+            </Button>
+            <Button
               variant="dark"
               size="sm"
               icon={LocateFixed}
               loading={updating}
-              onClick={handleConfirmGoOnline}
+              onClick={() => handleConfirmGoOnline(false)}
             >
               Enable GPS & Go Online
             </Button>

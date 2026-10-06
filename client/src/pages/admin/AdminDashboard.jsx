@@ -23,6 +23,7 @@ import Button from "../../components/Button";
 import Loader from "../../components/Loader";
 import ErrorState from "../../components/ErrorState";
 import AdminFleetMap from "../../components/admin/AdminFleetMap";
+import AdminSafetyMonitoring from "../../components/admin/AdminSafetyMonitoring";
 import * as adminApi from "../../services/adminApi";
 import * as supportApi from "../../services/supportApi";
 import { getErrorMessage } from "../../services/api";
@@ -30,7 +31,7 @@ import { useToast } from "../../context/ToastContext";
 
 export default function AdminDashboard() {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "fleet" | "trips" | "drivers" | "riders" | "incidents"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "safety" | "fleet" | "trips" | "drivers" | "riders" | "incidents"
   const [overview, setOverview] = useState(null);
   const [ridesData, setRidesData] = useState({ rides: [], pagination: {} });
   const [driversData, setDriversData] = useState({ drivers: [], pagination: {} });
@@ -201,11 +202,12 @@ export default function AdminDashboard() {
       <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200/80 pb-2 text-sm font-semibold">
         {[
           { id: "overview", label: "Financial Overview", icon: TrendingUp },
+          { id: "safety", label: "Live Safety Operations", icon: ShieldAlert, isEmergency: true },
           { id: "fleet", label: "Live Fleet Map", icon: Radio },
           { id: "trips", label: `Trips Ledger (${ridesData.pagination?.totalCount || 0})`, icon: Clock },
           { id: "drivers", label: `Driver Fleet (${fleet.totalDrivers})`, icon: Car },
           { id: "riders", label: `Rider Directory (${users.totalRiders})`, icon: Users },
-          { id: "incidents", label: `Trust & Safety (${incidentsData.pagination?.totalCount || incidentsData.incidents?.length || 0})`, icon: ShieldAlert },
+          { id: "incidents", label: `Trust & Safety (${incidentsData.pagination?.totalCount || incidentsData.incidents?.length || 0})`, icon: LifeBuoy },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -216,16 +218,23 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 rounded-xl px-3.5 py-2 transition-all ${
                 isActive
-                  ? "bg-slate-900 text-white shadow-sm font-bold"
+                  ? tab.isEmergency
+                    ? "bg-rose-600 text-white shadow-md shadow-rose-600/20 font-bold"
+                    : "bg-slate-900 text-white shadow-sm font-bold"
+                  : tab.isEmergency
+                  ? "bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold border border-rose-200/60"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={`h-4 w-4 ${tab.isEmergency && !isActive ? "text-rose-600 animate-pulse" : ""}`} />
               <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
+
+      {/* TAB: Live Safety Operations */}
+      {activeTab === "safety" && <AdminSafetyMonitoring />}
 
       {/* TAB 1: Financial Overview */}
       {activeTab === "overview" && (

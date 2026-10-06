@@ -66,7 +66,7 @@ async function getProfile(userId) {
   return user;
 }
 
-async function updateProfile(userId, { name, phone }) {
+async function updateProfile(userId, { name, phone, emergencyContacts }) {
   const user = await User.findById(userId);
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -82,6 +82,18 @@ async function updateProfile(userId, { name, phone }) {
 
   if (name && name.trim()) {
     user.name = name.trim();
+  }
+
+  if (Array.isArray(emergencyContacts)) {
+    // Validate and sanitize up to 5 contacts
+    user.emergencyContacts = emergencyContacts
+      .filter((c) => c && c.name && c.phone)
+      .slice(0, 5)
+      .map((c) => ({
+        name: String(c.name).trim(),
+        phone: String(c.phone).trim().replace(/\D/g, "").slice(0, 10),
+        relationship: String(c.relationship || "Family").trim(),
+      }));
   }
 
   await user.save();

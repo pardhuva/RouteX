@@ -85,7 +85,45 @@ async function handleMessage(message) {
     // is listening; io.to(room).emit() on a room nobody has joined yet
     // (e.g. right after ride.requested, before the rider's client has even
     // called join_ride) is simply a no-op, not an error.
-    broadcastRideStatus(event);
+    // If a safety event arrives, broadcast to admin operations and ride room
+    if (event.eventType === RIDE_EVENT_TYPES.safetyAlertCreated) {
+      io.to("admins").to("admin:safety").emit(SOCKET_EVENTS.serverToClient.safetyAlertCreated, {
+        alert: event.data,
+        rideId,
+        timestamp: event.timestamp,
+      });
+      io.to(`ride:${rideId}`).emit(SOCKET_EVENTS.serverToClient.safetyAlertCreated, {
+        alert: event.data,
+        rideId,
+        timestamp: event.timestamp,
+      });
+    } else if (event.eventType === RIDE_EVENT_TYPES.safetyConfirmed) {
+      io.to("admins").to("admin:safety").emit(SOCKET_EVENTS.serverToClient.safetyConfirmationUpdated, {
+        alertId: event.data.alertId,
+        rideId,
+        confirmedAt: event.data.confirmedAt,
+      });
+      io.to(`ride:${rideId}`).emit(SOCKET_EVENTS.serverToClient.safetyConfirmationUpdated, {
+        alertId: event.data.alertId,
+        rideId,
+        confirmedAt: event.data.confirmedAt,
+      });
+    } else if (event.eventType === RIDE_EVENT_TYPES.safetyResolved) {
+      io.to("admins").to("admin:safety").emit(SOCKET_EVENTS.serverToClient.safetyAlertUpdated, {
+        alertId: event.data.alertId,
+        rideId,
+        status: event.data.status,
+      });
+      if (rideId) {
+        io.to(`ride:${rideId}`).emit(SOCKET_EVENTS.serverToClient.safetyAlertUpdated, {
+          alertId: event.data.alertId,
+          rideId,
+          status: event.data.status,
+        });
+      }
+    } else {
+      broadcastRideStatus(event);
+    }
 
     if (event.eventType === RIDE_EVENT_TYPES.requested && event.data.matchedDriverId) {
       await notifyMatchedDriver(event);

@@ -1,10 +1,14 @@
 const express = require("express");
 const { body } = require("express-validator");
 const rideController = require("../controllers/ride.controller");
+const safetyController = require("../controllers/safety.controller");
 const authenticate = require("../middleware/auth.middleware");
 const requireRole = require("../middleware/role.middleware");
 
 const router = express.Router();
+
+// Public Live Trip Tracking for Emergency Contacts & Family (Unauthenticated)
+router.get("/track/:token", rideController.getPublicRideTracking);
 
 router.use(authenticate);
 
@@ -53,4 +57,30 @@ router.post(
   rideController.rateDriver
 );
 
+// Rider Safety Monitoring & Check-In Endpoints
+router.post(
+  "/:id/safety-alert",
+  requireRole("rider"),
+  [
+    body("alertType")
+      .optional()
+      .isIn(["rider_unsafe", "sos", "route_deviation", "safety_checkin_missed"])
+      .withMessage("Invalid alert type"),
+    body("description").optional().isString().trim().isLength({ max: 500 }),
+  ],
+  safetyController.triggerSafetyAlert
+);
+
+router.post(
+  "/:id/safety-confirmation",
+  requireRole("rider"),
+  safetyController.confirmSafety
+);
+
+router.get(
+  "/:id/safety-status",
+  safetyController.getRideSafetyStatus
+);
+
 module.exports = router;
+

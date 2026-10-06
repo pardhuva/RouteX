@@ -42,6 +42,10 @@ function initSocket(httpServer) {
       socket.join(`driver:${socket.user.id}`);
       socket.join("drivers");
       console.log(`[Socket] Driver connected: ${socket.user.id} (joined room driver:${socket.user.id} and drivers pool)`);
+    } else if (socket.user.role === "admin") {
+      socket.join("admins");
+      socket.join("admin:safety");
+      console.log(`[Socket] Admin connected: ${socket.user.id} (joined admin operations and safety monitoring rooms)`);
     }
 
     registerRideSocketHandlers(io, socket);
