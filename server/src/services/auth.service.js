@@ -58,4 +58,34 @@ async function login({ email, password }) {
   return { user, token };
 }
 
-module.exports = { register, login };
+async function getProfile(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  return user;
+}
+
+async function updateProfile(userId, { name, phone }) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  if (phone && phone !== user.phone) {
+    const existingPhone = await User.findOne({ phone, _id: { $ne: userId } });
+    if (existingPhone) {
+      throw new ApiError(409, "Phone number is already in use by another account");
+    }
+    user.phone = phone;
+  }
+
+  if (name && name.trim()) {
+    user.name = name.trim();
+  }
+
+  await user.save();
+  return user;
+}
+
+module.exports = { register, login, getProfile, updateProfile };

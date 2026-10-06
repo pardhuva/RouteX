@@ -1,630 +1,500 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Zap,
   MapPin,
   ShieldCheck,
   Radio,
   ArrowRight,
   Car,
   CheckCircle2,
-  Navigation,
   Clock,
   Wallet,
   Sparkles,
   ChevronRight,
-  Star,
-  Activity,
+  Bike,
+  Navigation,
   Layers,
-  Award,
+  Zap,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Button from "../components/Button";
 
-const FLEET_TIERS = [
+const RIDE_OPTIONS = [
   {
-    id: "go",
-    name: "RouteX Go",
-    tagline: "Everyday dependable city rides",
-    eta: "2-4 mins away",
-    capacity: "4 seats",
-    baseFare: 50,
-    perKm: 15,
-    sampleTrip: 146,
-    icon: Car,
-    badge: "Most Popular",
-    models: "Maruti Dzire, Hyundai i20, Honda Amaze",
-  },
-  {
-    id: "ev",
-    name: "RouteX Green EV",
-    tagline: "Zero-emission luxury electric fleet",
-    eta: "3-5 mins away",
-    capacity: "4 seats",
-    baseFare: 65,
-    perKm: 16,
-    sampleTrip: 168,
-    icon: Sparkles,
-    badge: "100% Electric",
-    models: "Tata Nexon EV, MG ZS EV, BYD Atto",
+    id: "moto",
+    name: "RouteX Moto",
+    tagline: "Quick and affordable solo trips",
+    eta: "2 mins away",
+    capacity: "1 person",
+    baseFare: 20,
+    perKm: 8,
+    sampleFare: 65,
+    icon: Bike,
+    vehicles: "Honda Activa, Bajaj Pulsar",
   },
   {
     id: "auto",
     name: "RouteX Auto",
-    tagline: "Beat peak-hour traffic at pocket rates",
-    eta: "1-3 mins away",
-    capacity: "3 seats",
+    tagline: "Everyday pocket-friendly city auto",
+    eta: "3 mins away",
+    capacity: "3 people",
     baseFare: 30,
     perKm: 11,
-    sampleTrip: 98,
-    icon: Navigation,
-    badge: "Budget Friendly",
-    models: "Bajaj RE Auto, Piaggio Ape",
+    sampleFare: 95,
+    icon: Zap,
+    vehicles: "Bajaj Compact, Piaggio Ape",
   },
   {
-    id: "bike",
-    name: "RouteX Moto",
-    tagline: "Solo sprint through dense urban streets",
-    eta: "1-2 mins away",
-    capacity: "1 helmet",
-    baseFare: 20,
-    perKm: 8,
-    sampleTrip: 64,
-    icon: Zap,
-    badge: "Fastest ETA",
-    models: "Honda Activa, TVS Jupiter",
+    id: "go",
+    name: "RouteX Go",
+    tagline: "Comfortable air-conditioned compacts",
+    eta: "3 mins away",
+    capacity: "4 people",
+    baseFare: 50,
+    perKm: 15,
+    sampleFare: 150,
+    icon: Car,
+    vehicles: "Maruti Dzire, Hyundai i20, WagonR",
+    popular: true,
+  },
+  {
+    id: "premier",
+    name: "RouteX Premier",
+    tagline: "Premium sedans with top-rated drivers",
+    eta: "4 mins away",
+    capacity: "4 people",
+    baseFare: 70,
+    perKm: 18,
+    sampleFare: 185,
+    icon: Sparkles,
+    vehicles: "Honda City, Hyundai Verna, Ciaz",
+  },
+  {
+    id: "xl",
+    name: "RouteX XL",
+    tagline: "Spacious 6-seater SUVs for groups & luggage",
+    eta: "5 mins away",
+    capacity: "6 people",
+    baseFare: 90,
+    perKm: 22,
+    sampleFare: 240,
+    icon: Layers,
+    vehicles: "Toyota Innova, Maruti Ertiga",
   },
 ];
 
-const ARCH_BENCHMARKS = [
+const ARCH_FEATURES = [
   {
-    icon: Radio,
-    metric: "< 1 ms",
-    label: "Geospatial Dispatch",
-    desc: "In-memory geospatial indexing routes the closest available driver to your pickup location instantly.",
+    title: "Redis GEO Spatial Indexing",
+    subtitle: "Real-Time Driver Matching",
+    description: "Driver coordinates are indexed in-memory using Redis geospatial commands, enabling radius queries to find the nearest available drivers in milliseconds.",
+    badge: "Redis GEO",
   },
   {
-    icon: ShieldCheck,
-    metric: "100%",
-    label: "ACID Trip Integrity",
-    desc: "Atomic conditional transactions guarantee zero double-bookings or phantom ride allocations.",
+    title: "Socket.IO Live Streaming",
+    subtitle: "Real-Time Location & Status Updates",
+    description: "Bidirectional WebSocket rooms stream live driver GPS positions, dispatch notifications, and trip lifecycle events without polling.",
+    badge: "WebSockets",
   },
   {
-    icon: Wallet,
-    metric: "80 / 20",
-    label: "Driver Partner Split",
-    desc: "Industry-first transparent revenue share ensuring dependable driver availability and fair pay.",
+    title: "Apache Kafka Event Pipeline",
+    subtitle: "Decoupled Event Streaming",
+    description: "Trip state transitions (requested, accepted, completed) are emitted to Kafka topics for reliable, asynchronous processing of ledger data and analytics.",
+    badge: "Kafka",
   },
   {
-    icon: Layers,
-    metric: "Real-Time",
-    label: "Telemetry & Sync",
-    desc: "High-throughput distributed event streaming powers instant status and live route updates.",
+    title: "Atomic State & Concurrency",
+    subtitle: "Zero Double-Booking Guarantee",
+    description: "MongoDB conditional updates ensure atomic ride claiming so that multiple nearby drivers cannot accidentally accept the same ride request.",
+    badge: "MongoDB ACID",
   },
 ];
 
 const HOW_IT_WORKS = [
   {
-    step: "01",
-    title: "Choose Pickup & Drop-off",
-    description: "Enter your destination or tap directly on the interactive map. See transparent, guaranteed upfront pricing with zero surge surprises.",
+    step: "1",
+    title: "Set your destination",
+    description: "Enter your pickup point and destination to view upfront guaranteed fares across vehicle categories.",
     icon: MapPin,
   },
   {
-    step: "02",
-    title: "Instant Driver Match",
-    description: "Our geospatial dispatch matches you with the nearest highly-rated driver within seconds, providing live turn-by-turn tracking.",
+    step: "2",
+    title: "Match with a nearby driver",
+    description: "Our geospatial matching engine immediately locates and dispatches the closest available partner driver.",
     icon: Radio,
   },
   {
-    step: "03",
-    title: "Safe Ride & Easy Payment",
-    description: "Enjoy secure OTP verification, 24/7 safety monitoring, and seamless automated digital checkout with transparent invoices.",
+    step: "3",
+    title: "Verify PIN & enjoy the ride",
+    description: "Share your secure 4-digit start PIN with your driver for safety, track the route live, and settle seamlessly.",
     icon: ShieldCheck,
   },
 ];
 
 export default function Landing() {
-  const [selectedFleet, setSelectedFleet] = useState(FLEET_TIERS[0]);
+  const [selectedRide, setSelectedRide] = useState(RIDE_OPTIONS[2]);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-600 selection:text-white">
-      <Navbar />
+    <div className="relative min-h-screen bg-slate-100/90 text-slate-900">
 
-      {/* Hero Section — Bright, Clean, Modern Uber Aesthetic */}
-      <section className="relative overflow-hidden border-b border-slate-200/80 bg-gradient-to-b from-white via-slate-50/70 to-white pb-20 pt-12 lg:pb-28 lg:pt-16">
-        <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center lg:gap-10">
-            {/* Left Column: Headline & Value Proposition */}
-            <div className="lg:col-span-6 xl:col-span-7">
+      {/* Continuous RouteX Map Background for entire page */}
+      <div className="pointer-events-none fixed inset-0 opacity-45 z-0">
+        <img
+          src="/images/routex_map.jpg"
+          alt=""
+          className="h-full w-full object-cover object-center brightness-95"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-100/70 via-slate-100/80 to-slate-100/90 backdrop-blur-[0.5px]" />
+      </div>
 
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <Navbar />
 
-              {/* Headline — Bold, Solid, Crisp */}
-              <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-6xl sm:leading-[1.08] xl:text-7xl">
-                Your ride.
-                <br />
-                Your time.
-                <br />
-                <span className="text-blue-600">Your way.</span>
-              </h1>
+        {/* Hero Section — Real Mobility Product Showcase */}
+        <section className="relative border-b border-slate-200/80 py-12 lg:py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
+              {/* Left Hero: Booking Input Box & Headline */}
+              <div className="lg:col-span-6 xl:col-span-6 space-y-6">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-xs">
+                  <MapPin className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Bangalore, IN</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-emerald-600 font-medium flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Dispatch
+                  </span>
+                </div>
 
-              <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
-                RouteX connects you with verified local drivers in seconds. Enjoy guaranteed upfront pricing, zero hidden surge multipliers, and seamless real-time GPS tracking.
-              </p>
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl leading-[1.1]">
+                  Go anywhere with RouteX
+                </h1>
 
-              {/* CTAs — Solid High-Contrast Modern Tech Aesthetic */}
-              <div className="mt-8 flex flex-col gap-3.5 sm:flex-row sm:items-center">
-                <Link to="/register">
-                  <Button size="lg" variant="dark" className="w-full sm:w-auto px-7 py-3.5 text-base font-bold shadow-md hover:-translate-y-0.5 transition-transform">
-                    Book a Ride
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
+                <p className="max-w-xl text-sm sm:text-base text-slate-600 leading-relaxed">
+                  Everyday rides made simple and reliable. Get paired with verified nearby drivers in real-time with upfront guaranteed fares.
+                </p>
 
-                <Link to="/register">
-                  <Button
-                    size="lg"
-                    variant="secondary"
-                    className="w-full sm:w-auto px-6 py-3.5 text-base font-semibold border-slate-300 text-slate-800 hover:bg-slate-100 shadow-sm"
-                  >
-                    <Car className="mr-2 h-4 w-4 text-blue-600" />
-                    Drive with RouteX
-                    <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-800 border border-blue-200">
-                      Keep 80%
-                    </span>
-                  </Button>
-                </Link>
+                {/* Ride Request Card */}
+                <div className="rounded-2xl border border-slate-200/90 bg-white/95 p-4 shadow-sm max-w-md space-y-3 backdrop-blur-sm">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                      <div className="h-2 w-2 rounded-full bg-slate-900 shrink-0" />
+                      <input
+                        type="text"
+                        readOnly
+                        value="Indiranagar 100ft Road, Bangalore"
+                        className="w-full text-xs font-medium text-slate-800 bg-transparent outline-none cursor-default"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                      <div className="h-2 w-2 rounded-sm bg-brand-600 shrink-0" />
+                      <input
+                        type="text"
+                        readOnly
+                        value="Koramangala 4th Block, Bangalore"
+                        className="w-full text-xs font-medium text-slate-800 bg-transparent outline-none cursor-default"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <Link to="/register" className="flex-1">
+                      <Button size="md" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs py-2.5 shadow-sm">
+                        See Fares & Book
+                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                      </Button>
+                    </Link>
+                    <Link to="/login" className="text-xs font-semibold text-slate-700 hover:text-slate-900 px-2">
+                      Sign in →
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Value Metrics */}
+                <div className="grid grid-cols-3 gap-4 border-t border-slate-200/80 pt-5 max-w-md">
+                  <div>
+                    <div className="text-base font-bold text-slate-900">Upfront</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Fixed Fares</div>
+                  </div>
+                  <div>
+                    <div className="text-base font-bold text-emerald-600">80% Share</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Driver Earnings</div>
+                  </div>
+                  <div>
+                    <div className="text-base font-bold text-brand-600">4-Digit PIN</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Boarding Security</div>
+                  </div>
+                </div>
               </div>
 
-              {/* Micro Metrics Proof Ticker */}
-              <div className="mt-12 grid grid-cols-2 gap-4 border-t border-slate-200 pt-8 sm:grid-cols-4">
-                <div>
-                  <div className="text-2xl font-black text-slate-900">⚡ &lt; 3 min</div>
-                  <div className="text-xs text-slate-500 mt-0.5 font-medium">Average Pickup</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-black text-blue-600">⭐ 4.95</div>
-                  <div className="text-xs text-slate-500 mt-0.5 font-medium">Driver Quality Rating</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-black text-emerald-600">80% Net</div>
-                  <div className="text-xs text-slate-500 mt-0.5 font-medium">Driver Direct Payout</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-black text-slate-900">🛡️ 100%</div>
-                  <div className="text-xs text-slate-500 mt-0.5 font-medium">Verified &amp; Insured</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Realistic Live Ride Dispatch HUD (Bright Modern Device Card) */}
-            <div className="lg:col-span-6 xl:col-span-5">
-              <div className="relative mx-auto max-w-lg lg:max-w-none">
-                {/* Main Card Container — Clean White Tactile Card with Soft Elevation */}
-                <div className="relative rounded-[2rem] border border-slate-200/90 bg-white p-5 sm:p-6 shadow-xl ring-1 ring-slate-900/5">
-                  {/* Top Vehicle Preview Card */}
-                  <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
+              {/* Right Hero: Clean 2x2 Mobility Photography Grid */}
+              <div className="lg:col-span-6 xl:col-span-6">
+                <div className="grid grid-cols-2 gap-3.5">
+                  {/* Image 1: Real Passenger Booking */}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white aspect-[4/3] shadow-xs">
                     <img
-                      src="/images/routex_car.jpg"
-                      alt="RouteX Electric Fleet"
-                      className="h-full w-full object-cover object-center transition-transform duration-700 hover:scale-105"
+                      src="/images/routex_hero_rider.jpg"
+                      alt="Rider booking a trip on smartphone"
+                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
                     />
-
-                    {/* Gradient Overlay for Text Readability */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-                    {/* Live Badge in top left */}
-                    <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      RouteX Prime EV
-                    </div>
-
-                    {/* Location coordinates in top right */}
-                    <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/70 px-2.5 py-1 text-[10px] font-mono text-slate-200 backdrop-blur-md">
-                      Hitec City • TS 07 UA 1002
-                    </div>
-
-                    {/* Bottom overlay with quick trip stats */}
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-xl border border-white/20 bg-white/95 px-3.5 py-2.5 shadow-md backdrop-blur-md">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                          <Zap className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-900">Driver En Route</div>
-                          <div className="text-[10px] text-slate-500">Pickup OTP: <strong className="text-slate-800 font-mono">4921</strong></div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-black text-blue-700">2 mins away</div>
-                        <div className="text-[10px] text-slate-500">450m to Cyber Towers</div>
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Driver & Trip Profile — Authentic Telugu Driver Venkateswara Rao */}
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 font-bold text-white text-sm shadow-sm">
-                          VR
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900">Venkateswara Rao</span>
-                            <span className="flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
-                              <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> 4.95
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-500">Tata Nexon EV • TS 07 UA 1002</div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-sm font-extrabold text-slate-900">₹146.00</div>
-                        <div className="text-[10px] text-blue-600 font-semibold">Guaranteed Fare</div>
-                      </div>
-                    </div>
-
-                    {/* Route Steps — Hyderabad Hubs */}
-                    <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-2.5 w-2.5 rounded-full bg-blue-600 ring-4 ring-blue-100" />
-                        <span className="font-semibold text-slate-800">Hitec City, Cyber Towers (Pickup)</span>
-                      </div>
-                      <div className="ml-1 h-3.5 w-0.5 border-l border-dashed border-slate-300" />
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-amber-100" />
-                        <span className="font-semibold text-slate-800">Gachibowli DLF Hub (Drop-off)</span>
-                      </div>
-                    </div>
+                  {/* Image 2: Verified Partner Driver */}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white aspect-[4/3] shadow-xs">
+                    <img
+                      src="/images/routex_driver.jpg"
+                      alt="Verified RouteX Driver Partner"
+                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
                   </div>
 
-                  {/* Safety and Live Telemetry Bar */}
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/80 px-3.5 py-2 text-xs text-emerald-900 shadow-xs">
-                    <span className="flex items-center gap-2 font-medium">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                      Live GPS Telemetry • Verified Driver
-                    </span>
-                    <span className="text-[11px] font-bold text-emerald-700">24/7 Safety Active</span>
+                  {/* Image 3: City Transit Scene (Auto / Cab) */}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white aspect-[4/3] shadow-xs">
+                    <img
+                      src="/images/routex_hero_transit.jpg"
+                      alt="Everyday city auto rickshaw and cab transit"
+                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
+                  </div>
+
+                  {/* Image 4: Passenger Arriving at Destination */}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white aspect-[4/3] shadow-xs">
+                    <img
+                      src="/images/routex_hero_dest.jpg"
+                      alt="Passenger arriving safely at destination"
+                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Interactive Fleet & Upfront Pricing Showcase */}
-      <section className="border-b border-slate-200 bg-slate-50 py-20">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="rounded-full border border-slate-300 bg-white px-3.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-              Fleet Options
-            </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Choose your way to move
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 sm:text-base">
-              Transparent per-kilometre rates with no hidden surge markups. Select a fleet category:
-            </p>
+        {/* How RouteX Works */}
+        <section id="dispatch" className="py-16 border-b border-slate-200/80 scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-2xl mx-auto">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                How RouteX Works
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                A straightforward, transparent ride-hailing experience for riders and drivers alike.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-8 sm:grid-cols-3">
+              {HOW_IT_WORKS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.step} className="rounded-2xl border border-slate-200/90 bg-white/90 p-6 shadow-xs backdrop-blur-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600 text-white font-semibold shadow-xs">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-400">Step {item.step}</span>
+                    </div>
+                    <h3 className="mt-4 text-base font-bold text-slate-900">{item.title}</h3>
+                    <p className="mt-2 text-sm text-slate-600 leading-relaxed">{item.description}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        </section>
 
-          {/* Vehicle Selector Tabs */}
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-2">
-            {FLEET_TIERS.map((tier) => {
-              const active = selectedFleet.id === tier.id;
-              const Icon = tier.icon;
-              return (
-                <button
-                  key={tier.id}
-                  onClick={() => setSelectedFleet(tier)}
-                  className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
-                    active
-                      ? "border-slate-900 bg-slate-900 text-white shadow-md"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-100 shadow-sm"
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 ${active ? "text-blue-400" : "text-slate-500"}`} />
-                  <span>{tier.name}</span>
-                  {tier.badge && (
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                        active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {tier.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        {/* Vehicle Fleet Tiers */}
+        <section id="fleet" className="py-16 border-b border-slate-200/80 scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-2xl">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Rides for every situation
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                From quick bike sprints to spacious 6-seater SUVs, choose the ride that fits your journey.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {RIDE_OPTIONS.map((tier) => {
+                const Icon = tier.icon;
+                return (
+                  <div
+                    key={tier.id}
+                    className="rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-xs flex flex-col justify-between backdrop-blur-sm"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-brand-600">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className="text-xs text-slate-500 font-medium">{tier.capacity}</span>
+                      </div>
+
+                      <h3 className="mt-4 text-base font-bold text-slate-900">{tier.name}</h3>
+                      <p className="mt-1 text-xs text-slate-600">{tier.tagline}</p>
+                      <p className="mt-2 text-xs text-slate-500">Common vehicles: {tier.vehicles}</p>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-slate-100 flex items-baseline justify-between">
+                      <div>
+                        <span className="text-xs text-slate-400">Starting from</span>
+                        <div className="text-lg font-bold text-slate-900">₹{tier.baseFare}</div>
+                      </div>
+                      <div className="text-right text-xs text-slate-500">
+                        ₹{tier.perKm}/km + ₹2/min
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        </section>
 
-          {/* Interactive Tier Card Preview */}
-          <div className="mx-auto mt-8 max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-card">
-            <div className="grid gap-6 md:grid-cols-2 md:items-center">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800 border border-blue-200">
-                    {selectedFleet.badge}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs text-slate-600 font-medium">
-                    <Clock className="h-3 w-3 text-blue-600" /> {selectedFleet.eta}
-                  </span>
+        {/* Driver Partner Section */}
+        <section id="economics" className="py-16 border-b border-slate-200/80 scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
+              {/* Driver Photo & Quote */}
+              <div className="lg:col-span-5">
+                <div className="relative overflow-hidden rounded-2xl border border-slate-200 shadow-sm bg-white">
+                  <img
+                    src="/images/routex_driver.jpg"
+                    alt="RouteX Driver Partner"
+                    className="h-80 w-full object-cover"
+                  />
+                  <div className="p-4 bg-slate-900 text-white">
+                    <div className="text-xs font-semibold text-emerald-400">Verified Driver Partner</div>
+                    <div className="text-sm font-bold mt-0.5">Venkateswara Rao · Bangalore Fleet</div>
+                    <p className="mt-2 text-xs text-slate-300 italic leading-relaxed">
+                      "Driving with RouteX is fair and transparent. 80% of every fare settles directly to my bank account every week with zero hidden deductions."
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Driver Value Proposition */}
+              <div className="lg:col-span-7 space-y-5">
+                <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                  80/20 Transparent Platform Model
                 </div>
 
-                <h3 className="mt-3 text-2xl font-black text-slate-900">{selectedFleet.name}</h3>
-                <p className="mt-1 text-sm text-slate-600">{selectedFleet.tagline}</p>
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Earn more on your terms. Keep 80% of every fare.
+                </h2>
 
-                <div className="mt-5 space-y-2 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
-                    <span>Fleet models: <strong className="text-slate-900">{selectedFleet.models}</strong></span>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Unlike traditional aggregators that take unpredictable 30–40% commissions, RouteX operates on a clear, guaranteed 80/20 platform split. You keep 80% of the trip fare, settled directly every week.
+                </p>
+
+                <div className="grid gap-3 sm:grid-cols-2 pt-2">
+                  <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3.5 shadow-xs backdrop-blur-sm">
+                    <div className="font-semibold text-slate-900 text-sm">80% Net Trip Earnings</div>
+                    <div className="text-xs text-slate-500 mt-1">Direct transparent cut on all completed rides.</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
-                    <span>Capacity: <strong className="text-slate-900">{selectedFleet.capacity}</strong></span>
+
+                  <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3.5 shadow-xs backdrop-blur-sm">
+                    <div className="font-semibold text-slate-900 text-sm">Automated Weekly Payouts</div>
+                    <div className="text-xs text-slate-500 mt-1">Earnings settle reliably to your bank account every week.</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
-                    <span>Dual-tier geospatial dispatch with live turn-by-turn sync</span>
+
+                  <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3.5 shadow-xs backdrop-blur-sm">
+                    <div className="font-semibold text-slate-900 text-sm">Smart Location Dispatch</div>
+                    <div className="text-xs text-slate-500 mt-1">Get matched with pickups near you to reduce idle driving.</div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3.5 shadow-xs backdrop-blur-sm">
+                    <div className="font-semibold text-slate-900 text-sm">Verified Passenger Profiles</div>
+                    <div className="text-xs text-slate-500 mt-1">Every passenger is verified with secure PIN boarding.</div>
                   </div>
                 </div>
 
-                <div className="mt-6">
-                  <Link to="/register">
-                    <Button size="md" variant="dark" className="font-bold shadow-sm">
-                      Book {selectedFleet.name}
-                      <ChevronRight className="ml-1 h-4 w-4" />
+                <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                  <Link to="/register?role=driver">
+                    <Button size="md" className="bg-brand-600 hover:bg-brand-700 text-white font-semibold shadow-xs">
+                      Register as a Driver
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <Link to="/login">
+                    <Button size="md" variant="secondary" className="border-slate-300 text-slate-700 bg-white/90 hover:bg-white font-medium shadow-xs">
+                      Driver Sign In
                     </Button>
                   </Link>
                 </div>
               </div>
-
-              {/* Fare Calculator Box */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 font-mono text-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3 font-sans">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Transparent Fare Breakdown</span>
-                  <span className="text-[11px] text-blue-700 font-mono font-bold">Base + (Dist×Rate) + (Time×₹2)</span>
-                </div>
-
-                <div className="mt-4 space-y-2.5 text-xs">
-                  <div className="flex justify-between text-slate-600">
-                    <span className="font-sans">Base Booking Fare</span>
-                    <span className="text-slate-900 font-bold">₹{selectedFleet.baseFare}.00</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span className="font-sans">Per-Kilometre Rate</span>
-                    <span className="text-slate-900 font-bold">₹{selectedFleet.perKm}.00 / km</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span className="font-sans">Time Rate (during trip)</span>
-                    <span className="text-slate-900 font-bold">₹2.00 / min</span>
-                  </div>
-
-                  <div className="border-t border-slate-200 pt-3">
-                    <div className="flex items-baseline justify-between">
-                      <span className="font-sans text-slate-800 font-bold">Sample Trip (~5.0 km, 12 min):</span>
-                      <span className="text-xl font-black text-blue-700">₹{selectedFleet.sampleTrip}.00</span>
-                    </div>
-                    <div className="mt-1 text-[11px] text-slate-500 font-sans">
-                      80% direct net driver credit + 20% platform infrastructure allocation.
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Driver Partner Section — Authentic Telugu Driver Venkateswara Rao */}
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white py-20 lg:py-28">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-            {/* Left Column: Authentic Driver Image */}
-            <div className="lg:col-span-6">
-              <div className="relative mx-auto max-w-md lg:max-w-none">
-                <div className="relative overflow-hidden rounded-3xl border border-slate-200 shadow-xl">
-                  <img
-                    src="/images/routex_driver.jpg"
-                    alt="RouteX Driver Partner Venkateswara Rao"
-                    className="h-[440px] w-full object-cover object-center"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-
-                  {/* Floating Quote Badge */}
-                  <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/20 bg-white/95 p-4 shadow-lg backdrop-blur-md text-slate-900">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-xs text-white">
-                        ✓
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">Venkateswara Rao • RouteX Partner Driver</div>
-                        <div className="text-[10px] text-blue-700 font-semibold">1,200+ rides • Hyderabad Fleet (Hitec City)</div>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs italic text-slate-700 leading-relaxed">
-                      "RouteX tho drive cheyadam chala transparent ga undi. Every Monday 80% net direct ga bank account lo paduthundi. Smart dispatch valla Hitec City and Gachibowli madhya idle time thaggindi."
-                    </p>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      (Translation: "Driving with RouteX is completely transparent. Every Monday 80% net earnings credit directly to my bank account. Smart dispatch between Hitec City and Gachibowli eliminated deadhead miles.")
-                    </p>
-                  </div>
-                </div>
+        {/* System Engineering & Architecture */}
+        <section id="architecture" className="py-16 border-b border-slate-200/80 scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 border border-blue-200">
+                System Architecture
               </div>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Engineered for reliability & scale
+              </h2>
+              <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                RouteX uses an event-driven architecture combining in-memory geospatial indexes, WebSocket streams, and distributed message queues for consistent real-time ride matching.
+              </p>
             </div>
 
-            {/* Right Column: Driver Benefits & Earnings Guarantee */}
-            <div className="lg:col-span-6">
-              <span className="rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1 text-xs font-semibold text-blue-800">
-                Partner with RouteX
-              </span>
-              <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-                Keep 80% of every trip.
-                <br />
-                <span className="text-blue-600">Get paid every Monday.</span>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {ARCH_FEATURES.map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-xs flex flex-col justify-between backdrop-blur-sm"
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200">
+                        {item.badge}
+                      </span>
+                    </div>
+                    <h3 className="mt-3 text-sm font-bold text-slate-900">{item.title}</h3>
+                    <div className="text-xs font-medium text-brand-600 mt-0.5">{item.subtitle}</div>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-600">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Ready to Ride / Drive CTA */}
+        <section className="py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-2xl bg-brand-900 p-8 sm:p-12 text-center text-white shadow-lg">
+              <h2 className="text-2xl font-bold sm:text-3xl text-white">
+                Ready to get moving with RouteX?
               </h2>
-
-              <p className="mt-4 text-base text-slate-600 leading-relaxed">
-                Most ride-hailing platforms deduct 30–40% in hidden commissions and penalties. RouteX guarantees an
-                exact 80/20 revenue split with real-time financial tracking and automated ISO calendar week payouts.
+              <p className="mt-2 text-sm text-blue-100 max-w-xl mx-auto">
+                Create an account in seconds to book your first ride or join as a partner driver.
               </p>
-
-              <div className="mt-6 space-y-4">
-                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                    <Wallet className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900">Automated Weekly Bank Deposits</h4>
-                    <p className="text-xs text-slate-500">Direct deposit every calendar week with downloadable earnings logs and tax invoices.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-700">
-                    <Radio className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900">Smart Geospatial Dispatch</h4>
-                    <p className="text-xs text-slate-500">Zero deadhead miles. Our Redis GEO engine routes nearby riders directly to your current location.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-700">
-                    <ShieldCheck className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900">Zero Double-Booking Guarantee</h4>
-                    <p className="text-xs text-slate-500">Atomic CAS ensures that once you tap accept, the ride is exclusively yours — no phantom requests.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex items-center gap-4">
+              <div className="mt-6 flex flex-col sm:flex-row justify-center gap-3">
                 <Link to="/register">
-                  <Button size="lg" variant="dark" className="font-bold shadow-md">
-                    Become a RouteX Driver
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button size="lg" variant="white" className="w-full sm:w-auto font-bold px-6 shadow-sm">
+                    Sign Up as Rider
                   </Button>
                 </Link>
-                <Link to="/login" className="text-sm font-semibold text-slate-700 hover:text-slate-900">
-                  Driver Portal Login →
+                <Link to="/register?role=driver">
+                  <Button size="lg" variant="secondary" className="w-full sm:w-auto border-brand-700 bg-brand-800 text-white hover:bg-brand-700 font-semibold px-6 shadow-sm">
+                    Sign Up as Driver
+                  </Button>
                 </Link>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Engineering Architecture Bento Grid */}
-      <section id="features" className="border-b border-slate-200 bg-slate-50 py-20">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="rounded-full border border-slate-300 bg-white px-3.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-              System Architecture
-            </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Engineered for sub-millisecond precision
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 sm:text-base">
-              Under the hood, RouteX is an enterprise-grade distributed system designed for resilience, concurrency, and real-time scale.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {ARCH_BENCHMARKS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.label}
-                  className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
-                >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-blue-700">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="mt-4 text-2xl font-black text-slate-900">{item.metric}</div>
-                  <h3 className="mt-1 text-sm font-bold text-slate-800">{item.label}</h3>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">{item.desc}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works (3 Steps) */}
-      <section id="how-it-works" className="border-b border-slate-200 bg-white py-20">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="rounded-full border border-slate-300 bg-slate-50 px-3.5 py-1 text-xs font-semibold text-slate-700">
-              Trip Lifecycle
-            </span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              How RouteX Works
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 sm:text-base">
-              From instant pickup request to verified settlement in three seamless steps.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-8 sm:grid-cols-3">
-            {HOW_IT_WORKS.map((step) => {
-              const Icon = step.icon;
-              return (
-                <div
-                  key={step.step}
-                  className="relative rounded-2xl border border-slate-200 bg-slate-50/70 p-6 sm:p-8 shadow-sm"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-blue-700 border border-slate-200 shadow-sm">
-                      <Icon className="h-6 w-6" />
-                    </div>
-                    <span className="font-mono text-3xl font-black text-slate-300">{step.step}</span>
-                  </div>
-
-                  <h3 className="mt-6 text-lg font-bold text-slate-900">{step.title}</h3>
-                  <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-500">{step.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA Banner */}
-      <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-slate-900 px-8 py-16 text-center sm:px-16 shadow-xl text-white">
-          <div className="relative mx-auto max-w-2xl">
-            <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl">
-              Ready to experience RouteX?
-            </h2>
-            <p className="mx-auto mt-4 text-base text-slate-300">
-              Join thousands of daily riders and partner drivers on India's most advanced high-concurrency urban mobility platform.
-            </p>
-
-            <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
-              <Link to="/register">
-                <Button size="lg" variant="white" className="w-full sm:w-auto font-bold px-8 shadow-md">
-                  Get Started Today
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Link to="/login">
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto border-slate-700 bg-slate-800 text-white hover:bg-slate-700">
-                  Sign In to Account
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 }
+
+

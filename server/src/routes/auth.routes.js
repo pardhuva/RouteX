@@ -5,6 +5,8 @@ const { authLimiter } = require("../middleware/rateLimit.middleware");
 
 const router = express.Router();
 
+const authenticate = require("../middleware/auth.middleware");
+
 router.post(
   "/register",
   authLimiter,
@@ -30,4 +32,20 @@ router.post(
   authController.login
 );
 
+router.get("/profile", authenticate, authController.getProfile);
+
+router.patch(
+  "/profile",
+  authenticate,
+  [
+    body("name").optional().trim().notEmpty().withMessage("Name cannot be empty"),
+    body("phone")
+      .optional()
+      .matches(/^[0-9]{10}$/)
+      .withMessage("Phone number must be a valid 10-digit number"),
+  ],
+  authController.updateProfile
+);
+
 module.exports = router;
+

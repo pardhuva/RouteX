@@ -1,25 +1,25 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Sun, Moon, Crosshair, Navigation } from "lucide-react";
+import { Sun, Moon, Crosshair, Navigation, ShieldCheck } from "lucide-react";
 import { fetchRoadRoute, reverseGeocode } from "../services/geocodingService";
 
 export const DEMO_CITY_CENTER = { latitude: 17.4435, longitude: 78.3772 };
 
-// Custom CSS for Leaflet pulse and sleek pins
+// Custom CSS for Leaflet markers - sleek, technical, production-grade
 const createMarkerIcon = (type, heading = 0) => {
   if (type === "pickup") {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
-        <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
-          <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(16, 185, 129, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-          <div style="position: relative; z-index: 10; width: 30px; height: 30px; border-radius: 9999px; background: #059669; border: 2.5px solid #ffffff; box-shadow: 0 4px 12px rgba(5,150,105,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 13px;">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+          <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(16, 185, 129, 0.25); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="position: relative; z-index: 10; width: 26px; height: 26px; border-radius: 8px; background: #059669; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 11px;">
             P
           </div>
         </div>
       `,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
     });
   }
 
@@ -27,26 +27,26 @@ const createMarkerIcon = (type, heading = 0) => {
     return L.divIcon({
       className: "custom-leaflet-marker",
       html: `
-        <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
-          <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(99, 102, 241, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-          <div style="position: relative; z-index: 10; width: 30px; height: 30px; border-radius: 9999px; background: #4f46e5; border: 2.5px solid #ffffff; box-shadow: 0 4px 12px rgba(79,70,229,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 13px;">
+        <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+          <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(79, 70, 229, 0.25); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="position: relative; z-index: 10; width: 26px; height: 26px; border-radius: 8px; background: #4f46e5; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 11px;">
             D
           </div>
         </div>
       `,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
     });
   }
 
-  // Driver car icon
+  // Driver car icon with heading angle
   return L.divIcon({
     className: "custom-leaflet-marker",
     html: `
-      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px;">
-        <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(14, 165, 233, 0.3); animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"></div>
-        <div style="position: relative; z-index: 10; width: 34px; height: 34px; border-radius: 9999px; background: #0f172a; border: 2px solid #38bdf8; box-shadow: 0 4px 14px rgba(14,165,233,0.5); display: flex; align-items: center; justify-content: center; transform: rotate(${heading}deg); transition: transform 0.4s ease;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
+        <div style="position: absolute; inset: 0; border-radius: 9999px; background: rgba(14, 165, 233, 0.2); animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"></div>
+        <div style="position: relative; z-index: 10; width: 30px; height: 30px; border-radius: 9999px; background: #0f172a; border: 2px solid #38bdf8; box-shadow: 0 4px 12px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; transform: rotate(${heading}deg); transition: transform 0.4s ease;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 10.7 2 10.8 2 11v5c0 .6.4 1 1 1h2"/>
             <circle cx="7" cy="17" r="2"/>
             <circle cx="17" cy="17" r="2"/>
@@ -54,19 +54,19 @@ const createMarkerIcon = (type, heading = 0) => {
         </div>
       </div>
     `,
-    iconSize: [42, 42],
-    iconAnchor: [21, 21],
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
 };
 
 const TILE_LAYERS = {
   streets: {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
   dark: {
     url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
 };
 
@@ -92,7 +92,7 @@ export default function MapView({
   const routePolylineRef = useRef(null);
   const driverRoutePolylineRef = useRef(null);
 
-  const [theme, setTheme] = useState("streets"); // "streets" | "dark"
+  const [theme, setTheme] = useState("streets");
   const [heading, setHeading] = useState(0);
   const prevDriverLocRef = useRef(null);
 
@@ -147,7 +147,6 @@ export default function MapView({
       const { lat, lng } = e.latlng;
       const point = { latitude: lat, longitude: lng };
 
-      // Reverse geocode to get a clean address name for the user
       const address = await reverseGeocode(lat, lng);
       onPick(point, activeField, address);
     };
@@ -168,7 +167,7 @@ export default function MapView({
       if (!pickupMarkerRef.current) {
         pickupMarkerRef.current = L.marker(latLng, { icon: createMarkerIcon("pickup") })
           .addTo(map)
-          .bindPopup("<b>Pickup Location</b>");
+          .bindPopup("<div style='font-size:12px;font-weight:700;'>Pickup Location</div>");
       } else {
         pickupMarkerRef.current.setLatLng(latLng);
       }
@@ -188,7 +187,7 @@ export default function MapView({
       if (!destMarkerRef.current) {
         destMarkerRef.current = L.marker(latLng, { icon: createMarkerIcon("destination") })
           .addTo(map)
-          .bindPopup("<b>Drop-off Destination</b>");
+          .bindPopup("<div style='font-size:12px;font-weight:700;'>Drop-off Destination</div>");
       } else {
         destMarkerRef.current.setLatLng(latLng);
       }
@@ -206,7 +205,6 @@ export default function MapView({
     if (driverLocation && driverLocation.latitude && driverLocation.longitude) {
       const latLng = [driverLocation.latitude, driverLocation.longitude];
 
-      // Calculate heading angle
       let newHeading = heading;
       if (prevDriverLocRef.current) {
         const dLon = driverLocation.longitude - prevDriverLocRef.current.longitude;
@@ -222,7 +220,7 @@ export default function MapView({
       if (!driverMarkerRef.current) {
         driverMarkerRef.current = L.marker(latLng, { icon: createMarkerIcon("driver", newHeading) })
           .addTo(map)
-          .bindPopup("<b>RouteX Driver</b>");
+          .bindPopup("<div style='font-size:12px;font-weight:700;'>RouteX Driver</div>");
       } else {
         driverMarkerRef.current.setLatLng(latLng);
         driverMarkerRef.current.setIcon(createMarkerIcon("driver", newHeading));
@@ -249,10 +247,10 @@ export default function MapView({
 
         routePolylineRef.current = L.polyline(latLngs, {
           color: "#4f46e5",
-          weight: 5,
+          weight: 4,
           opacity: 0.85,
           lineJoin: "round",
-          dashArray: rideStatus === "accepted" ? "8, 8" : undefined,
+          dashArray: rideStatus === "accepted" ? "6, 6" : undefined,
         }).addTo(map);
       });
 
@@ -265,7 +263,7 @@ export default function MapView({
     }
   }, [pickup?.latitude, pickup?.longitude, destination?.latitude, destination?.longitude, rideStatus]);
 
-  // Fetch and draw live driver approach route (driver to pickup or destination)
+  // Fetch and draw live driver approach route
   useEffect(() => {
     if (!mapInstanceRef.current || !driverLocation?.latitude) {
       if (driverRoutePolylineRef.current && mapInstanceRef.current) {
@@ -288,9 +286,9 @@ export default function MapView({
 
         driverRoutePolylineRef.current = L.polyline(latLngs, {
           color: "#0ea5e9",
-          weight: 4,
+          weight: 3.5,
           opacity: 0.9,
-          dashArray: "6, 6",
+          dashArray: "5, 5",
           lineCap: "round",
         }).addTo(map);
       });
@@ -315,7 +313,7 @@ export default function MapView({
       map.setView(points[0], 14, { animate: true });
     } else if (points.length > 1) {
       const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true });
     }
   }, [pickup?.latitude, destination?.latitude, driverLocation?.latitude]);
 
@@ -329,7 +327,7 @@ export default function MapView({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-md ${
+      className={`relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-xs ${
         interactive ? "cursor-crosshair" : ""
       } ${className}`}
       style={{ minHeight: "350px" }}
@@ -337,49 +335,49 @@ export default function MapView({
       <div ref={mapContainerRef} className="absolute inset-0 h-full w-full z-0" />
 
       {/* Floating Map Controls */}
-      <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2">
+      <div className="absolute top-2.5 right-2.5 z-[400] flex flex-col gap-1.5">
         <button
           type="button"
           onClick={() => setTheme((t) => (t === "streets" ? "dark" : "streets"))}
           title={theme === "streets" ? "Switch to Dark Mode" : "Switch to Streets Mode"}
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 p-2 text-slate-700 shadow-md backdrop-blur-md transition-all hover:bg-white hover:text-slate-900 border border-slate-200/80"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 p-1 text-slate-700 shadow-xs backdrop-blur-md transition-all hover:bg-white hover:text-slate-900 border border-slate-200"
         >
-          {theme === "streets" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4 text-amber-500" />}
+          {theme === "streets" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5 text-amber-500" />}
         </button>
 
         <button
           type="button"
           onClick={handleCenterMap}
           title="Recenter Map"
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/90 p-2 text-slate-700 shadow-md backdrop-blur-md transition-all hover:bg-white hover:text-brand-600 border border-slate-200/80"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/95 p-1 text-slate-700 shadow-xs backdrop-blur-md transition-all hover:bg-white hover:text-brand-600 border border-slate-200"
         >
-          <Crosshair className="h-4 w-4" />
+          <Crosshair className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {/* Interactive Helper Badge */}
       {interactive && (
-        <div className="absolute bottom-3 left-3 z-[400] flex items-center gap-2 rounded-xl bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur-md border border-slate-700/50">
-          <Navigation className="h-3.5 w-3.5 text-brand-400 animate-pulse" />
-          <span>Click anywhere on map to set {activeField === "pickup" ? "Pickup" : "Drop-off"}</span>
+        <div className="absolute bottom-2.5 left-2.5 z-[400] flex items-center gap-1.5 rounded-lg bg-slate-900/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md backdrop-blur-md border border-slate-800">
+          <Navigation className="h-3 w-3 text-brand-400 animate-pulse" />
+          <span>Click map to place {activeField === "pickup" ? "Pickup" : "Destination"} pin</span>
         </div>
       )}
 
       {/* Real-time Status Badge */}
       {rideStatus && (
-        <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 rounded-xl bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-800 shadow-md backdrop-blur-md border border-slate-200">
+        <div className="absolute top-2.5 left-2.5 z-[400] flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-900 shadow-xs backdrop-blur-md border border-slate-200">
           <span
-            className={`h-2.5 w-2.5 rounded-full ${
+            className={`h-2 w-2 rounded-full ${
               rideStatus === "completed"
                 ? "bg-emerald-500"
                 : rideStatus === "started"
-                ? "bg-indigo-600 animate-pulse"
+                ? "bg-brand-600 animate-pulse"
                 : rideStatus === "accepted"
                 ? "bg-sky-500 animate-pulse"
                 : "bg-amber-500 animate-ping"
             }`}
           />
-          <span className="capitalize">{rideStatus === "accepted" ? "Driver on the way" : rideStatus}</span>
+          <span className="capitalize">{rideStatus === "accepted" ? "Driver approaching" : rideStatus}</span>
         </div>
       )}
     </div>

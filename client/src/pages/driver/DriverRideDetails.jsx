@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin, Navigation, Clock, PlayCircle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MapPin, Navigation, Clock, PlayCircle, CheckCircle2, ShieldAlert, KeyRound } from "lucide-react";
 import MapView from "../../components/MapView";
 import RideStatusTimeline from "../../components/RideStatusTimeline";
 import PersonInfoCard from "../../components/PersonInfoCard";
@@ -8,6 +8,7 @@ import Button from "../../components/Button";
 import Badge from "../../components/Badge";
 import Loader from "../../components/Loader";
 import ErrorState from "../../components/ErrorState";
+import SupportReportModal from "../../components/SupportReportModal";
 import { useLiveRide } from "../../hooks/useLiveRide";
 import { useToast } from "../../context/ToastContext";
 import { formatDate } from "../../utils/format";
@@ -20,13 +21,6 @@ function toLatLng(point) {
   const [longitude, latitude] = point.location.coordinates;
   return { latitude, longitude };
 }
-
-// Note: unlike the rider's ride-details page, this never fetches payment
-// info — server/src/services/payment.service.js#getPaymentById authorizes
-// only the paying rider, so a driver requesting it would correctly get a
-// 403. That's an intentional backend boundary, not an oversight here.
-import SupportReportModal from "../../components/SupportReportModal";
-import { ShieldAlert } from "lucide-react";
 
 export default function DriverRideDetails() {
   const { id } = useParams();
@@ -98,7 +92,7 @@ export default function DriverRideDetails() {
     }
   }
 
-  if (loading) return <Loader fullScreen label="Loading ride details..." />;
+  if (loading) return <Loader fullScreen label="Loading trip dispatch telemetry..." />;
   if (error) return <ErrorState message={error} onRetry={loadRide} />;
   if (!ride) return null;
 
@@ -108,68 +102,79 @@ export default function DriverRideDetails() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-700"
+          className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition"
         >
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> Back to Console
         </button>
         <button
           type="button"
           onClick={() => setSupportOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-rose-300 hover:text-rose-600 shadow-xs transition"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-rose-300 hover:text-rose-700 shadow-xs transition"
         >
-          <ShieldAlert className="h-4 w-4 text-rose-500" /> Help & Safety Support
+          <ShieldAlert className="h-4 w-4 text-rose-600" /> Driver SOS & Safety
         </button>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Ride Details</h1>
-          <p className="mt-0.5 text-xs text-slate-400">ID: {ride._id}</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 font-mono">
+              TRIP TELEMETRY #{ride._id.slice(-6).toUpperCase()}
+            </h1>
+          </div>
+          <p className="mt-0.5 text-xs font-mono text-slate-500">ID: {ride._id}</p>
         </div>
         <Badge label={meta.label} className={meta.badge} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-panel">
             <RideStatusTimeline status={ride.status} />
 
-            <div className="mt-5 space-y-1.5 rounded-xl bg-slate-50 p-3.5 text-sm">
-              <div className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <span className="text-slate-600">{ride.pickup.address}</span>
+            <div className="mt-5 space-y-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3.5 text-xs">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <div>
+                  <span className="font-mono text-[10px] uppercase font-bold text-slate-400">Pickup</span>
+                  <p className="font-medium text-slate-800">{ride.pickup.address}</p>
+                </div>
               </div>
-              <div className="flex items-start gap-2">
-                <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" />
-                <span className="text-slate-600">{ride.destination.address}</span>
+              <div className="border-t border-slate-200/60 pt-2 flex items-start gap-2.5">
+                <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600" />
+                <div>
+                  <span className="font-mono text-[10px] uppercase font-bold text-slate-400">Destination</span>
+                  <p className="font-medium text-slate-800">{ride.destination.address}</p>
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 space-y-2 text-xs text-slate-500">
+            <div className="mt-4 space-y-1.5 rounded border border-slate-100 p-2.5 font-mono text-[11px] text-slate-500">
               <div className="flex items-center gap-2">
-                <Clock className="h-3.5 w-3.5" /> Requested {formatDate(ride.requestedAt)}
+                <Clock className="h-3 w-3 text-slate-400" /> Requested: {formatDate(ride.requestedAt)}
               </div>
-              {ride.acceptedAt && <div className="pl-5">Accepted {formatDate(ride.acceptedAt)}</div>}
-              {ride.startedAt && <div className="pl-5">Started {formatDate(ride.startedAt)}</div>}
-              {ride.completedAt && <div className="pl-5">Completed {formatDate(ride.completedAt)}</div>}
+              {ride.acceptedAt && <div className="pl-5">Accepted: {formatDate(ride.acceptedAt)}</div>}
+              {ride.startedAt && <div className="pl-5">Started: {formatDate(ride.startedAt)}</div>}
+              {ride.completedAt && <div className="pl-5">Completed: {formatDate(ride.completedAt)}</div>}
             </div>
 
             <div className="mt-4">
-              <PersonInfoCard person={ride.rider} roleLabel="Rider" />
+              <PersonInfoCard person={ride.rider} roleLabel="Passenger" />
             </div>
 
             {ride.status === "accepted" && (
               <form onSubmit={handleStart} className="mt-5 space-y-3">
-                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-xs">
-                  <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
-                    Enter Passenger's Start PIN
+                <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-xs">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-brand-950">
+                    <KeyRound className="h-4 w-4 text-brand-700" />
+                    Verify Start PIN
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Ask the passenger for their 4-digit PIN to verify pickup:
+                  <p className="mt-1 text-xs text-slate-600">
+                    Ask the passenger for their 4-digit security PIN to unlock ignition & navigation:
                   </p>
 
                   <div className="mt-3">
@@ -185,7 +190,7 @@ export default function DriverRideDetails() {
                         setPinError("");
                       }}
                       placeholder="• • • •"
-                      className="w-full text-center tracking-[0.75em] font-mono text-2xl font-black rounded-xl border border-indigo-300 bg-white py-2.5 text-indigo-950 placeholder-slate-300 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-inner"
+                      className="w-full text-center tracking-[0.6em] font-mono text-2xl font-bold rounded-lg border border-brand-300 bg-white py-2 text-brand-950 placeholder-slate-300 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-xs"
                     />
                     {pinError && (
                       <p className="mt-1.5 text-center text-xs font-semibold text-rose-600">
@@ -202,15 +207,22 @@ export default function DriverRideDetails() {
                   icon={PlayCircle}
                   loading={busy}
                   disabled={pin.length !== 4}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md"
+                  className="bg-brand-600 hover:bg-brand-500 text-white font-bold"
                 >
-                  Verify PIN & Start Ride
+                  Verify PIN & Start Trip
                 </Button>
               </form>
             )}
             {ride.status === "started" && (
-              <Button fullWidth size="lg" className="mt-5" icon={CheckCircle2} loading={busy} onClick={handleComplete}>
-                Complete Ride
+              <Button
+                fullWidth
+                size="lg"
+                className="mt-5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                icon={CheckCircle2}
+                loading={busy}
+                onClick={handleComplete}
+              >
+                Complete Ride & Settle Fare
               </Button>
             )}
           </div>
@@ -223,9 +235,8 @@ export default function DriverRideDetails() {
             destination={destinationPoint}
             driverLocation={driverLocation}
             rideStatus={ride.status}
-            className="h-80 w-full lg:h-full lg:min-h-[420px]"
+            className="h-80 w-full rounded-xl border border-slate-200/80 shadow-panel lg:h-full lg:min-h-[460px]"
           />
-
         </div>
       </div>
 

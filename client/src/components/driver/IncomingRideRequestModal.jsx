@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { MapPin, Navigation, X, Check } from "lucide-react";
+import { MapPin, Navigation, X, Check, Clock, ShieldCheck, User } from "lucide-react";
 import Modal from "../Modal";
 import Button from "../Button";
 import * as rideApi from "../../services/rideApi";
@@ -7,15 +7,10 @@ import { getErrorMessage } from "../../services/api";
 import { useToast } from "../../context/ToastContext";
 import { useSocketEvent } from "../../hooks/useSocketEvent";
 
-// `request` is the payload from useIncomingRideRequest's "new_ride_request"
-// event: `{ rideId, pickup: { address }, destination: { address },
-// rider: { name } }` — see rideEventConsumer.js#notifyMatchedDriver, which
-// builds it.
 export default function IncomingRideRequestModal({ request, onAccepted, onDismiss }) {
   const { showToast } = useToast();
   const [processing, setProcessing] = useState(false);
 
-  // Auto-dismiss modal if the rider cancels or another driver claims the ride
   useSocketEvent(
     "ride_claimed",
     useCallback(
@@ -50,6 +45,9 @@ export default function IncomingRideRequestModal({ request, onAccepted, onDismis
 
   if (!request) return null;
 
+  const grossFare = request.estimatedFare || request.fare || 80;
+  const netEarnings = Math.round(grossFare * 0.8 * 100) / 100;
+
   async function handleAccept() {
     setProcessing(true);
     try {
@@ -64,27 +62,63 @@ export default function IncomingRideRequestModal({ request, onAccepted, onDismis
   }
 
   return (
-    <Modal open={Boolean(request)} onClose={onDismiss} title="New ride request">
-      <div className="space-y-3">
-        {request.rider?.name && <p className="text-sm text-slate-500">Rider: {request.rider.name}</p>}
-        <div className="space-y-1.5 rounded-xl bg-slate-50 p-3.5 text-sm">
-          <div className="flex items-start gap-2">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-            <span className="text-slate-600">{request.pickup?.address}</span>
+    <Modal open={Boolean(request)} onClose={onDismiss} title="Incoming Ride Dispatch" size="md">
+      <div className="space-y-3.5">
+        {/* Urgent High-Contrast Header */}
+        <div className="flex items-center justify-between rounded-lg bg-slate-900 p-3.5 text-white">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Net Driver Payout (80%)</div>
+            <div className="text-2xl font-black text-emerald-400">₹{netEarnings}</div>
           </div>
+          <div className="text-right">
+            <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-200 border border-slate-700">
+              Immediate Dispatch
+            </span>
+            <div className="text-[10px] text-slate-400 mt-1">Gross Fare: ₹{grossFare}</div>
+          </div>
+        </div>
+
+        {/* Rider Info */}
+        {request.rider?.name && (
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 px-1">
+            <User className="h-3.5 w-3.5 text-slate-400" />
+            <span>Passenger: {request.rider.name}</span>
+          </div>
+        )}
+
+        {/* Route Points */}
+        <div className="space-y-2 rounded-lg bg-slate-50 p-3 text-xs border border-slate-200">
           <div className="flex items-start gap-2">
-            <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" />
-            <span className="text-slate-600">{request.destination?.address}</span>
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Pickup Location</div>
+              <div className="font-semibold text-slate-900">{request.pickup?.address}</div>
+            </div>
+          </div>
+          <div className="border-t border-slate-200/60 pt-2 flex items-start gap-2">
+            <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600" />
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Drop-off Destination</div>
+              <div className="font-semibold text-slate-900">{request.destination?.address}</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-5 flex gap-2.5">
-        <Button variant="secondary" fullWidth icon={X} onClick={onDismiss} disabled={processing}>
-          Reject
+      <div className="mt-5 flex gap-2 pt-2 border-t border-slate-100">
+        <Button variant="secondary" size="md" fullWidth icon={X} onClick={onDismiss} disabled={processing}>
+          Decline
         </Button>
-        <Button fullWidth icon={Check} loading={processing} onClick={handleAccept}>
-          Accept Ride
+        <Button
+          variant="dark"
+          size="md"
+          fullWidth
+          icon={Check}
+          loading={processing}
+          onClick={handleAccept}
+          className="font-bold bg-emerald-700 hover:bg-emerald-600 text-white"
+        >
+          Accept (Earn ₹{netEarnings})
         </Button>
       </div>
     </Modal>

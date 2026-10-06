@@ -118,3 +118,10 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 start();
+
+
+
+// This is the main entry point (ignition switch) for the RouteX backend.
+// It handles the ordered startup sequence: connecting to MongoDB, Redis, and Kafka,
+// binding Socket.IO to the HTTP server, starting background workers, 
+// and managing graceful shutdown procedures when the server is stopped.

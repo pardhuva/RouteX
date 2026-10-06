@@ -86,6 +86,13 @@ export function AuthProvider({ children }) {
     [persistSession]
   );
 
+  const updateUser = useCallback(
+    (updatedUserData) => {
+      persistSession(updatedUserData, token);
+    },
+    [persistSession, token]
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -94,12 +101,14 @@ export function AuthProvider({ children }) {
       initializing,
       login,
       register,
+      updateUser,
       logout,
     }),
-    [user, token, initializing, login, register, logout]
+    [user, token, initializing, login, register, updateUser, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+
 }
 
 export function useAuth() {

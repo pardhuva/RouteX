@@ -25,7 +25,7 @@ export default function RiderDashboard() {
     setError(null);
     try {
       const res = await rideApi.getMyRides({ page: 1, limit: 5 });
-      const fetchedRides = res.data.data.rides;
+      const fetchedRides = res.data.data.rides || [];
       setRides(fetchedRides);
       const active = fetchedRides.find((r) => ACTIVE_STATUSES.includes(r.status));
       setActiveRide((prev) => {
@@ -43,20 +43,25 @@ export default function RiderDashboard() {
     loadRides();
   }, [loadRides]);
 
-  if (loading) return <Loader fullScreen label="Loading your dashboard..." />;
-  if (error) return <ErrorState message={error} onRetry={loadRides} />;
+  if (loading && rides.length === 0) return <Loader fullScreen label="Loading your dashboard..." />;
+  if (error && rides.length === 0) return <ErrorState message={error} onRetry={loadRides} />;
 
   const recentRides = rides.filter((r) => r._id !== activeRide?._id).slice(0, 3);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
-          {activeRide ? "Your ride" : `Where to, ${user.name.split(" ")[0]}?`}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {activeRide ? "Here's what's happening with your current ride." : "Book a ride in just a few taps."}
-        </p>
+    <div className="space-y-6">
+      {/* Top Welcome Strip */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+            {activeRide ? "Live Trip Monitor" : `Welcome back, ${user.name.split(" ")[0]}`}
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {activeRide
+              ? "Live GPS tracking and ride lifecycle in progress."
+              : "Set your pickup and drop-off to view guaranteed upfront fares."}
+          </p>
+        </div>
       </div>
 
       {activeRide ? (
@@ -69,24 +74,37 @@ export default function RiderDashboard() {
         <BookingPanel onRideCreated={setActiveRide} />
       )}
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-bold text-slate-900">Recent rides</h2>
-          <Link to="/rider/history" className="flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        {recentRides.length === 0 ? (
-          <EmptyState icon={History} title="No rides yet" description="Your ride history will show up here once you take your first trip." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {recentRides.map((ride) => (
-              <RideCard key={ride._id} ride={ride} role="rider" />
-            ))}
+      {/* Recent Trips */}
+      {!activeRide && (
+        <div className="pt-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Recent Trips</h2>
+              <p className="text-[11px] text-slate-500">Your most recent ride history</p>
+            </div>
+            <Link
+              to="/rider/history"
+              className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700"
+            >
+              View all trips <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
-        )}
-      </div>
+
+          {recentRides.length === 0 ? (
+            <EmptyState
+              icon={History}
+              title="No rides yet"
+              description="Your completed and ongoing trips will appear here."
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {recentRides.map((ride) => (
+                <RideCard key={ride._id} ride={ride} role="rider" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

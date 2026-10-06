@@ -1,19 +1,19 @@
 import { Loader2 } from "lucide-react";
 
 const VARIANTS = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500 shadow-soft",
-  secondary: "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 focus-visible:ring-slate-300",
-  danger: "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500",
-  ghost: "bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-300",
-  dark: "bg-ink-900 text-white hover:bg-ink-800 focus-visible:ring-ink-700 shadow-soft",
-  white: "bg-white text-slate-950 hover:bg-slate-100 font-bold focus-visible:ring-slate-400 shadow-sm",
-  graphite: "bg-slate-900 text-slate-200 border border-slate-700 hover:bg-slate-800 hover:text-white focus-visible:ring-slate-600 font-semibold",
+  primary: "bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500 shadow-xs active:bg-brand-800",
+  secondary: "bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 focus-visible:ring-slate-300 shadow-xs",
+  danger: "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500 shadow-xs active:bg-rose-800",
+  ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-300",
+  dark: "bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-700 shadow-xs active:bg-slate-950",
+  white: "bg-white text-slate-950 hover:bg-slate-100 font-bold focus-visible:ring-slate-300 shadow-sm",
+  graphite: "bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700 hover:text-white focus-visible:ring-slate-600 font-semibold shadow-xs",
 };
 
 const SIZES = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2.5 text-sm",
-  lg: "px-6 py-3.5 text-base",
+  sm: "px-2.5 py-1.5 text-xs font-semibold",
+  md: "px-3.5 py-2 text-sm font-semibold",
+  lg: "px-5 py-2.5 text-sm font-bold",
 };
 
 export default function Button({
@@ -32,10 +32,10 @@ export default function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 select-none ${VARIANTS[variant]} ${SIZES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
       {...props}
     >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : null}
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : Icon ? <Icon className="h-3.5 w-3.5" aria-hidden="true" /> : null}
       {children}
     </button>
   );

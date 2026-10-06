@@ -10,3 +10,12 @@ export function register({ name, email, phone, password, role }) {
 export function login({ email, password }) {
   return api.post("/auth/login", { email, password });
 }
+
+export function getProfile() {
+  return api.get("/auth/profile");
+}
+
+export function updateProfile(data) {
+  return api.patch("/auth/profile", data);
+}
+

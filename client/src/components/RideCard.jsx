@@ -4,11 +4,6 @@ import Badge from "./Badge";
 import { formatShortDate, formatCurrency } from "../utils/format";
 import { rideStatusMeta } from "../utils/statusMeta";
 
-// One ride row for the history list, shared by both the rider and driver
-// history pages — `role` decides whether the counterpart shown is the
-// driver or the rider, since server/src/services/ride.service.js#getMyRides
-// returns the same Ride shape to both, populated with both `rider` and
-// `driver`.
 export default function RideCard({ ride, role }) {
   const navigate = useNavigate();
   const meta = rideStatusMeta(ride.status);
@@ -19,37 +14,39 @@ export default function RideCard({ ride, role }) {
     <button
       type="button"
       onClick={() => navigate(`/${role}/ride/${ride._id}`)}
-      className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card transition-all hover:border-brand-200 hover:shadow-soft sm:p-5"
+      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xs transition-all hover:border-slate-300 hover:shadow-sm"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+          <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
             <span>{formatShortDate(ride.createdAt)}</span>
             <span aria-hidden="true">&middot;</span>
-            <span>{counterpartLabel}: {counterpart?.name || "Not assigned"}</span>
+            <span className="truncate">{counterpartLabel}: {counterpart?.name || "Unassigned"}</span>
           </div>
 
           <div className="mt-2.5 space-y-1.5">
             <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-              <p className="truncate text-sm font-medium text-slate-700">{ride.pickup?.address}</p>
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              <p className="truncate text-xs font-semibold text-slate-800">{ride.pickup?.address}</p>
             </div>
             <div className="flex items-start gap-2">
-              <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" />
-              <p className="truncate text-sm font-medium text-slate-700">{ride.destination?.address}</p>
+              <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600" />
+              <p className="truncate text-xs font-medium text-slate-600">{ride.destination?.address}</p>
             </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           <Badge label={meta.label} className={meta.badge} />
-          <p className="text-sm font-bold text-slate-900">{ride.fare ? formatCurrency(ride.fare) : "—"}</p>
+          <p className="text-sm font-extrabold text-slate-900">{ride.fare ? formatCurrency(ride.fare) : "—"}</p>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-1 border-t border-slate-100 pt-2.5 text-xs font-semibold text-brand-600">
-        View details
-        <ChevronRight className="h-3.5 w-3.5" />
+      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
+        <span className="font-mono text-[10px] text-slate-400">ID: ...{ride._id.slice(-6)}</span>
+        <span className="flex items-center gap-1 font-semibold text-brand-600 group-hover:text-brand-700">
+          View details <ChevronRight className="h-3.5 w-3.5" />
+        </span>
       </div>
     </button>
   );

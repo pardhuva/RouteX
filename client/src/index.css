@@ -4,23 +4,63 @@
 
 @layer base {
   :focus-visible {
-    outline: 2px solid theme("colors.brand.500");
-    outline-offset: 2px;
+    outline: 2px solid theme("colors.brand.600");
+    outline-offset: 1px;
     border-radius: 4px;
   }
 
   html {
     scroll-behavior: smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 selection:bg-brand-600 selection:text-white;
+  }
+
+  /* Compact form defaults */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }
 
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: theme("colors.slate.300");
-    border-radius: 999px;
+    border-radius: 9999px;
   }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: theme("colors.slate.400");
+  }
+
+  /* Glass surface utilities */
+  .surface-elevated {
+    @apply bg-white border border-slate-200/80 shadow-card;
+  }
+}
+
+/* Custom leaflet map adjustments */
+.leaflet-container {
+  font-family: inherit !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.15) !important;
+  border: 1px solid #e2e8f0 !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  line-height: 1.4 !important;
 }
